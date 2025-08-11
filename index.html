@@ -5,462 +5,102 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>QR Room — Peer file + chat demo</title>
-    <style>
-        :root {
-            --bg: #0f1724;
-            --card: #0b1220;
-            --muted: #94a3b8;
-            --accent: #60a5fa
-        }
 
-        html,
-        body {
-            height: 100%;
-            margin: 0;
-            background: linear-gradient(180deg, #071029 0%, #08121a 100%);
-            font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-            color: #e6eef8
-        }
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/style.css">
 
-        .wrap {
-            min-height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 30px
-        }
-
-        .card {
-            width: 980px;
-            max-width: 98%;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 12px;
-            padding: 18px;
-            box-shadow: 0 8px 30px rgba(2, 6, 23, 0.6)
-        }
-
-        .top {
-            display: flex;
-            gap: 16px;
-            align-items: center
-        }
-
-        .center {
-            flex: 1;
-            text-align: center
-        }
-
-        #qrcode {
-            display: inline-block;
-            padding: 8px;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 8px
-        }
-
-        button {
-            background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            padding: 8px 12px;
-            border-radius: 8px;
-            color: inherit;
-            cursor: pointer
-        }
-
-        .small {
-            font-size: 13px;
-            color: var(--muted)
-        }
-
-        .cols {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 14px
-        }
-
-        .box {
-            background: rgba(255, 255, 255, 0.02);
-            padding: 12px;
-            border-radius: 10px;
-            min-height: 260px;
-            display: flex;
-            flex-direction: column
-        }
-
-        .messages {
-            flex: 1;
-            overflow: auto;
-            padding: 6px;
-            border-radius: 8px
-        }
-
-        .msg {
-            margin: 6px 0;
-            padding: 8px;
-            border-radius: 8px;
-            max-width: 78%
-        }
-
-        .me {
-            align-self: flex-end;
-            background: rgba(96, 165, 250, 0.12)
-        }
-
-        .them {
-            align-self: flex-start;
-            background: rgba(255, 255, 255, 0.03)
-        }
-
-        .input-row {
-            display: flex;
-            gap: 8px;
-            margin-top: 8px
-        }
-
-        input[type=file] {
-            display: none
-        }
-
-        .meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 8px
-        }
-
-        .status {
-            font-size: 13px
-        }
-
-        .hidden {
-            display: none
-        }
-
-        a.download {
-            display: inline-block;
-            margin-top: 6px
-        }
-    </style>
 </head>
 
 <body>
-    <div class="wrap">
-        <div class="card">
-            <div class="top">
-                <div class="center">
-                    <h2 id="title">Scan / open this room link</h2>
-                    <div id="qrcode"></div>
-                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center">
-                        <button id="copyBtn">Copy link</button>
-                        <button id="regen">New room</button>
+
+    <div class="container-fluid">
+        <div class="row g-3">
+            <!-- Main column -->
+            <div class="col-lg-8">
+                <div class="card-ui">
+                    <div class="text-center mb-3">
+                        <h4 id="title">Scan / open this room link</h4>
+                        <div id="qrcode" class="d-inline-block"></div>
+
+                        <div class="mt-2 d-flex justify-content-center gap-2">
+                            <button id="copyBtn" class="btn btn-outline-light btn-sm">Copy link</button>
+                            <button id="regen" class="btn btn-outline-light btn-sm">New room</button>
+                        </div>
+                        <div class="small mt-2">Room URL: <span id="roomUrl" class="text-break"></span></div>
+                        <div class="small mt-1">Mode: <strong id="mode">waiting</strong></div>
                     </div>
-                    <div class="small" style="margin-top:6px">Room URL: <span id="roomUrl"></span></div>
-                    <div class="small" style="margin-top:6px">Mode: <strong id="mode">waiting</strong></div>
+
+                    <div id="chat-file-section" class="d-none">
+                        <div class="row g-3">
+                            <div class="col-md-7">
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div><strong>Text chat</strong> <span class="small">(peer-to-peer)</span></div>
+                                        <div class="small" id="peersCount">Peers: 1</div>
+                                    </div>
+                                    <div id="messages" class="messages d-flex flex-column"></div>
+                                    <div class="input-group mt-2">
+                                        <input id="textIn" type="text" class="form-control"
+                                            placeholder="Type a message">
+                                        <button id="sendBtn" class="btn btn-primary">Send</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-5">
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div><strong>Files</strong> <span class="small">(select to send)</span></div>
+                                        <div class="small" id="fileStatus">No transfers</div>
+                                    </div>
+
+                                    <div class="d-flex flex-column align-items-center justify-content-center p-3"
+                                        style="background:rgba(255,255,255,0.02);border-radius:8px;min-height:160px">
+                                        <label for="fileInput" class="btn btn-outline-light btn-sm">Choose file</label>
+                                        <input id="fileInput" type="file" class="d-none">
+                                        <div id="incomingArea" class="mt-3 w-100"></div>
+                                    </div>
+
+                                    <div class="mt-2">
+                                        <small>
+                                            Accepted transfers will appear as download links.
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="small mt-3">Tips: open this page on both devices (or scan QR). The first
+                        visitor becomes the room host. When another joins the same room URL, mode turns to
+                        <strong>file-sharing</strong>. Files are sent over PeerJS data connections in chunks.
+                    </div>
                 </div>
             </div>
 
-            <div class="cols">
-                <div class="box" id="chatBox">
-                    <div class="meta">
-                        <div><strong>Text chat</strong> <span class="small">(peer-to-peer)</span></div>
-                        <div class="status" id="peersCount">Peers: 1</div>
+            <!-- Logs column -->
+            <div class="col-lg-4">
+                <div class="card-ui h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Connection Logs</strong>
+                        <button id="clearLogs" class="btn btn-sm btn-outline-light">Clear</button>
                     </div>
-                    <div class="messages" id="messages"></div>
-                    <div class="input-row">
-                        <input id="textIn" placeholder="Type a message" />
-                        <button id="sendBtn">Send</button>
-                    </div>
-                </div>
-
-                <div class="box" id="filesBox">
-                    <div class="meta">
-                        <div><strong>Files</strong> <span class="small">(select to send)</span></div>
-                        <div class="small" id="fileStatus">No transfers</div>
-                    </div>
-                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
-                        <label for="fileInput"
-                            style="cursor:pointer;padding:10px 14px;border-radius:8px;border:1px dashed rgba(255,255,255,0.06)">Choose
-                            file</label>
-                        <input id="fileInput" type="file" />
-                        <div id="incomingArea" style="margin-top:12px"></div>
-                    </div>
+                    <div id="logs"></div>
                 </div>
             </div>
-
-            <div style="margin-top:12px;font-size:13px;color:var(--muted)">Tips: open this page on both devices (or scan
-                QR). The first visitor becomes the room host. When another joins the same room URL, mode turns to
-                <strong>file-sharing</strong>. Files are sent over PeerJS data connections in chunks.</div>
         </div>
     </div>
 
-    <!-- Libraries -->
+    <!-- Toast container (bottom-right) -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+    <!-- libs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/script.js"></script>
 
-    <script>
-        // ---- CONFIG ----
-        // If you run your own PeerServer, set host/port/path in PEER_OPTS below.
-        const PEER_OPTS = {
-            // Example to use custom server -- replace with your server settings if needed:
-            // host: 'your-peer-server.com', port: 9000, path: '/peerjs', secure: true
-        };
-
-        // ---- Helpers ----
-        function uid(len = 6) { return Math.random().toString(36).slice(2, 2 + len) }
-        function getParam(name) { const url = new URL(location.href); return url.searchParams.get(name) }
-
-        // ---- Room + link + UI ----
-        let room = getParam('room') || uid(6)
-        function makeRoomLink(r) { return location.origin + location.pathname + '?room=' + r }
-        const link = makeRoomLink(room)
-
-        const qrcodeEl = document.getElementById('qrcode')
-        const roomUrlEl = document.getElementById('roomUrl')
-        const copyBtn = document.getElementById('copyBtn')
-        const regenBtn = document.getElementById('regen')
-        const modeEl = document.getElementById('mode')
-
-        new QRCode(qrcodeEl, { text: link, width: 140, height: 140 })
-        roomUrlEl.textContent = link
-
-        copyBtn.onclick = async () => { await navigator.clipboard.writeText(link); copyBtn.textContent = 'Copied ✓'; setTimeout(() => copyBtn.textContent = 'Copy link', 1600) }
-        regenBtn.onclick = () => { room = uid(6); const newL = makeRoomLink(room); roomUrlEl.textContent = newL; qrcodeEl.innerHTML = ''; new QRCode(qrcodeEl, { text: newL, width: 140, height: 140 }); updateHostAttempt() }
-
-        // ---- PeerJS logic ----
-        const peers = {} // id->conn
-        let peer = null
-        let amHost = false
-
-        const peersCountEl = document.getElementById('peersCount')
-        const messagesEl = document.getElementById('messages')
-        const sendBtn = document.getElementById('sendBtn')
-        const textIn = document.getElementById('textIn')
-        const fileInput = document.getElementById('fileInput')
-        const fileStatus = document.getElementById('fileStatus')
-        const incomingArea = document.getElementById('incomingArea')
-
-        function addMsg(text, who) { const d = document.createElement('div'); d.className = 'msg ' + (who === 'me' ? 'me' : 'them'); d.textContent = text; messagesEl.appendChild(d); messagesEl.scrollTop = messagesEl.scrollHeight }
-
-        function setMode(m) { modeEl.textContent = m }
-        function setPeersCount(n) { peersCountEl.textContent = 'Peers: ' + n }
-
-        // Try to become host by creating Peer with id == room.
-        function updateHostAttempt() {
-            if (peer) { try { peer.destroy() } catch (e) { } peer = null }
-            amHost = false
-            setMode('waiting')
-
-            // attempt to create a peer using the room id (first visitor becomes host)
-            try {
-                peer = new Peer(room, PEER_OPTS)
-                amHost = true
-                console.log('created peer as host with id', room)
-            } catch (err) {
-                // browsers sometimes throw — fallback to creating without id
-                peer = new Peer(undefined, PEER_OPTS)
-                amHost = false
-                console.log('fallback, created peer without id')
-            }
-
-            peer.on('open', id => {
-                console.log('peer open', id)
-                if (!amHost) {
-                    // connect to host
-                    const conn = peer.connect(room)
-                    setupConn(conn)
-                }
-                setPeersCount(Object.keys(peers).length + 1)
-            })
-
-            peer.on('connection', conn => {
-                // someone connected to us
-                console.log('incoming conn', conn.peer)
-                setupConn(conn)
-            })
-
-            peer.on('error', err => {
-                console.error('peer error', err)
-                // if id already taken and we tried to be host, create anonymous peer
-                if (err.type === 'unavailable-id' || err.type === 'peer-unavailable') {
-                    try { peer.destroy() } catch (e) { }
-                    peer = new Peer(undefined, PEER_OPTS)
-                    amHost = false
-                    peer.on('open', id => { peerIdReady() })
-                    peer.on('connection', c => setupConn(c))
-                }
-            })
-
-            function peerIdReady() {
-                const conn = peer.connect(room)
-                setupConn(conn)
-            }
-        }
-
-        function setupConn(conn) {
-            conn.on('open', () => {
-                peers[conn.peer] = conn
-                setPeersCount(Object.keys(peers).length + 1)
-                addMsg('Peer joined: ' + conn.peer, 'them')
-                // announce ourselves
-                conn.send({ type: 'meta', sub: 'joined', id: peer.id })
-                evaluateMode()
-            })
-
-            conn.on('data', data => handleData(conn, data))
-
-            conn.on('close', () => {
-                delete peers[conn.peer]
-                setPeersCount(Object.keys(peers).length + 1)
-                addMsg('Peer left: ' + conn.peer, 'them')
-                evaluateMode()
-            })
-        }
-
-        function handleData(conn, data) {
-            if (!data || !data.type) return
-            if (data.type === 'meta') {
-                if (data.sub === 'joined') {
-                    // someone announced
-                    console.log('peer joined', data.id)
-                    evaluateMode()
-                }
-            }
-            if (data.type === 'chat') {
-                addMsg(data.text, 'them')
-            }
-            if (data.type === 'file-meta') {
-                // incoming file offer
-                const id = data.fileId
-                const name = data.name
-                const size = data.size
-                const el = document.createElement('div')
-                el.innerHTML = `Incoming: <strong>${name}</strong> (${Math.round(size / 1024)} KB) <button data-id="${id}">Accept</button> <button data-id="${id}" data-rej>Reject</button>`
-                incomingArea.appendChild(el)
-
-                const acceptBtn = el.querySelector('button:not([data-rej])')
-                const rejBtn = el.querySelector('button[data-rej]')
-
-                let incoming = { chunks: [], size: 0, meta: data }
-                // attach to connection object to store state
-                conn._incoming = conn._incoming || {}
-                conn._incoming[id] = incoming
-
-                acceptBtn.onclick = () => {
-                    // send accept
-                    conn.send({ type: 'file-accept', fileId: id })
-                    fileStatus.textContent = 'Receiving: ' + name
-                    acceptBtn.disabled = true
-                }
-                rejBtn.onclick = () => { conn.send({ type: 'file-reject', fileId: id }); el.remove() }
-            }
-
-            if (data.type === 'file-chunk') {
-                const id = data.fileId
-                const chunk = data.chunk
-                const peerIn = conn._incoming && conn._incoming[id]
-                if (peerIn) {
-                    peerIn.chunks.push(chunk)
-                    peerIn.size += chunk.byteLength || chunk.length || 0
-                    // progress could be implemented
-                }
-            }
-
-            if (data.type === 'file-end') {
-                const id = data.fileId
-                const meta = conn._incoming && conn._incoming[id] && conn._incoming[id].meta
-                if (!meta) return
-                const chunks = conn._incoming[id].chunks
-                const blob = new Blob(chunks)
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = meta.name
-                a.textContent = 'Download ' + meta.name
-                a.className = 'download'
-                incomingArea.appendChild(a)
-                fileStatus.textContent = 'Received: ' + meta.name
-                delete conn._incoming[id]
-            }
-
-            if (data.type === 'file-accept') {
-                // receiver accepted -> start sending chunks
-                const fmeta = pendingFiles && pendingFiles[data.fileId]
-                if (fmeta) sendFileChunksToConn(conn, fmeta)
-            }
-
-            if (data.type === 'file-reject') {
-                fileStatus.textContent = 'Receiver rejected the file'
-            }
-        }
-
-        function evaluateMode() {
-            const peerCount = Object.keys(peers).length + 1
-            if (peerCount >= 2) { setMode('file-sharing'); } else { setMode('waiting'); }
-        }
-
-        // Chat send
-        sendBtn.onclick = () => {
-            const text = textIn.value.trim()
-            if (!text) return
-            addMsg(text, 'me')
-            broadcast({ type: 'chat', text })
-            textIn.value = ''
-        }
-
-        function broadcast(obj) {
-            for (const id in peers) { peers[id].send(obj) }
-        }
-
-        // File sending
-        let pendingFiles = {}
-        fileInput.onchange = async e => {
-            const f = e.target.files[0]
-            if (!f) return
-            const id = 'f_' + uid(8)
-            pendingFiles[id] = { file: f, meta: { fileId: id, name: f.name, size: f.size } }
-            fileStatus.textContent = 'Offering: ' + f.name
-            // send offer to all peers
-            broadcast({ type: 'file-meta', fileId: id, name: f.name, size: f.size })
-        }
-
-        // send chunks to a specific connection
-        async function sendFileChunksToConn(conn, fmeta) {
-            const file = fmeta.file
-            const chunkSize = 64 * 1024
-            const total = file.size
-            let offset = 0
-            const reader = new FileReader()
-
-            function readSlice(o) {
-                const slice = file.slice(o, o + chunkSize)
-                reader.readAsArrayBuffer(slice)
-            }
-
-            reader.onload = e => {
-                const buf = e.target.result
-                try { conn.send({ type: 'file-chunk', fileId: fmeta.meta.fileId, chunk: buf }) }
-                catch (err) { console.error('send chunk error', err) }
-                offset += buf.byteLength
-                if (offset < total) readSlice(offset)
-                else {
-                    conn.send({ type: 'file-end', fileId: fmeta.meta.fileId })
-                    fileStatus.textContent = 'Sent: ' + file.name
-                    delete pendingFiles[fmeta.meta.fileId]
-                }
-            }
-
-            readSlice(0)
-        }
-
-        // when a peer accepts, they send file-accept to the specific connection -> we send
-        // But we may need to send to the connection that accepted. The code above handles by listening for file-accept and calling sendFileChunksToConn(conn,...)
-
-        // init
-        updateHostAttempt()
-
-        // expose for debugging
-        window._dbg = { peer, peers }
-    </script>
 </body>
 
 </html>

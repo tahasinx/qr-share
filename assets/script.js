@@ -1,0 +1,228 @@
+// ---- CONFIG ----
+const PEER_OPTS = {
+    config: {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            // demo TURN (replace in production)
+            { urls: 'turn:relay1.expressturn.com:3478', username: 'efree', credential: 'expreSSTURN2023' }
+        ]
+    }
+}
+
+// ---- Helpers & UI refs ----
+function uid(len = 6) { return Math.random().toString(36).slice(2, 2 + len) }
+function getParam(name) { const u = new URL(location.href); return u.searchParams.get(name) }
+
+let room = getParam('room') || uid(6)
+function makeRoomLink(r) { return location.origin + location.pathname + '?room=' + r }
+let link = makeRoomLink(room)
+
+const qrcodeEl = document.getElementById('qrcode')
+const roomUrlEl = document.getElementById('roomUrl')
+const copyBtn = document.getElementById('copyBtn')
+const regenBtn = document.getElementById('regen')
+const modeEl = document.getElementById('mode')
+const chatFileSection = document.getElementById('chat-file-section')
+const peersCountEl = document.getElementById('peersCount')
+const messagesEl = document.getElementById('messages')
+const sendBtn = document.getElementById('sendBtn')
+const textIn = document.getElementById('textIn')
+const fileInput = document.getElementById('fileInput')
+const fileStatus = document.getElementById('fileStatus')
+const incomingArea = document.getElementById('incomingArea')
+const logsEl = document.getElementById('logs')
+const toastContainer = document.getElementById('toastContainer')
+const clearLogsBtn = document.getElementById('clearLogs')
+
+// render QR
+new QRCode(qrcodeEl, { text: link, width: 160, height: 160 })
+roomUrlEl.textContent = link
+
+copyBtn.addEventListener('click', async () => { await navigator.clipboard.writeText(link); copyBtn.textContent = 'Copied ✓'; setTimeout(() => copyBtn.textContent = 'Copy link', 1400) })
+regenBtn.addEventListener('click', () => { room = uid(6); link = makeRoomLink(room); roomUrlEl.textContent = link; qrcodeEl.innerHTML = ''; new QRCode(qrcodeEl, { text: link, width: 160, height: 160 }); updateHostAttempt() })
+clearLogsBtn.addEventListener('click', () => logsEl.innerHTML = '')
+
+function addLog(text) { const d = document.createElement('div'); d.textContent = (new Date()).toLocaleTimeString() + ' — ' + text; logsEl.appendChild(d); logsEl.scrollTop = logsEl.scrollHeight }
+
+function showToast(opts) { // {title,msg,autohide,delay,actions:[{label,cls,onclick}]}
+    const id = 't_' + uid(6);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `
+        <div id="${id}" class="toast align-items-center text-bg-dark border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <strong>${opts.title || ''}</strong><div>${opts.msg || ''}</div>
+                </div>
+                <div class="d-flex flex-column p-2 gap-1 align-items-end">
+                    ${(opts.actions || []).map((a, i) => `<button data-act='${i}' class='btn btn-sm ${a.cls || "btn-light"}'>${a.label}</button>`).join('')}
+                    <button data-close class='btn-close btn-close-white mt-1' aria-label='close'></button>
+                </div>
+            </div>
+        </div>`;
+    toastContainer.appendChild(wrapper);
+    const el = document.getElementById(id);
+    const bs = new bootstrap.Toast(el, { autohide: opts.autohide !== undefined ? opts.autohide : true, delay: opts.delay || 5000 });
+
+    // bind actions
+    (opts.actions || []).forEach((a, i) => {
+        wrapper.querySelector(`[data-act='${i}']`).addEventListener('click', () => {
+            a.onclick();
+            if (a.dismiss !== false) bs.hide();
+        });
+    });
+
+    wrapper.querySelector('[data-close]').addEventListener('click', () => bs.hide());
+    bs.show();
+    return { id, el: wrapper, bs };
+}
+
+
+// ---- PeerJS logic (adapted) ----
+const peers = {}
+let peer = null
+let amHost = false
+let pendingFiles = {}
+
+function addMsg(text, who) { const d = document.createElement('div'); d.className = 'msg ' + (who === 'me' ? 'me' : 'them'); d.textContent = text; messagesEl.appendChild(d); messagesEl.scrollTop = messagesEl.scrollHeight }
+function setMode(m) { modeEl.textContent = m }
+function setPeersCount(n) { peersCountEl.textContent = 'Peers: ' + n }
+
+function updateHostAttempt() {
+    if (peer) { try { peer.destroy() } catch (e) { } peer = null }
+    amHost = false; setMode('waiting'); addLog('Attempting to become host for room ' + room)
+    try {
+        peer = new Peer(room, PEER_OPTS); amHost = true; addLog('Created Peer as host: ' + room)
+    } catch (err) {
+        peer = new Peer(undefined, PEER_OPTS); amHost = false; addLog('Created anonymous Peer (host fallback)')
+    }
+
+    peer.on('open', id => {
+        addLog('Peer open: ' + id)
+        // show chat/file UI once peer ready
+        chatFileSection.classList.remove('d-none')
+        if (!amHost) { const conn = peer.connect(room); setupConn(conn) }
+        setPeersCount(Object.keys(peers).length + 1)
+        showToast({ title: 'Peer ready', msg: 'Peer ID: ' + id, autohide: true, delay: 2500 })
+    })
+
+    peer.on('connection', conn => { addLog('Incoming connection from ' + conn.peer); setupConn(conn); showToast({ title: 'Peer connected', msg: conn.peer, autohide: true, delay: 2200 }) })
+
+    peer.on('disconnected', () => { addLog('Peer disconnected'); showToast({ title: 'Disconnected', msg: 'Signaling disconnected', autohide: true }) })
+    peer.on('close', () => { addLog('Peer closed'); showToast({ title: 'Closed', msg: 'Peer connection closed', autohide: true }) })
+    peer.on('error', err => {
+        addLog('Peer error: ' + (err && err.type ? err.type : err)); showToast({ title: 'Peer error', msg: String(err), autohide: true })
+        if (err && (err.type === 'unavailable-id' || err.type === 'peer-unavailable')) {
+            try { peer.destroy() } catch (e) { }
+            peer = new Peer(undefined, PEER_OPTS); amHost = false
+            peer.on('open', () => { const conn = peer.connect(room); setupConn(conn) })
+            peer.on('connection', c => setupConn(c))
+        }
+    })
+}
+
+function setupConn(conn) {
+    conn.on('open', () => {
+        peers[conn.peer] = conn
+        setPeersCount(Object.keys(peers).length + 1)
+        addLog('Connection open: ' + conn.peer)
+        addMsg('Peer joined: ' + conn.peer, 'them')
+        conn.send({ type: 'meta', sub: 'joined', id: peer.id })
+        evaluateMode()
+        showToast({ title: 'Connected', msg: 'Peer ' + conn.peer, autohide: true, delay: 2000 })
+    })
+    conn.on('data', data => handleData(conn, data))
+    conn.on('close', () => { delete peers[conn.peer]; setPeersCount(Object.keys(peers).length + 1); addLog('Connection closed: ' + conn.peer); addMsg('Peer left: ' + conn.peer, 'them'); evaluateMode(); showToast({ title: 'Peer left', msg: conn.peer, autohide: true }) })
+}
+
+function handleData(conn, data) {
+    if (!data || !data.type) return
+    if (data.type === 'meta' && data.sub === 'joined') { addLog('Peer announced joined: ' + data.id); evaluateMode(); return }
+    if (data.type === 'chat') { addMsg(data.text, 'them'); addLog('Chat from ' + conn.peer + ': ' + data.text); return }
+
+    if (data.type === 'file-meta') {
+        // incoming file offer -> show toast with accept/reject
+        const fileId = data.fileId, name = data.name, size = data.size
+        addLog('Incoming file offer from ' + conn.peer + ': ' + name + ' (' + Math.round(size / 1024) + ' KB)')
+        // store incoming state on conn
+        conn._incoming = conn._incoming || {}
+        conn._incoming[fileId] = { chunks: [], size: 0, meta: data }
+
+        showToast({
+            title: 'Incoming file', msg: `${name} (${Math.round(size / 1024)} KB) from ${conn.peer}`, autohide: false,
+            actions: [
+                { label: 'Accept', cls: 'btn-success', onclick: () => { conn.send({ type: 'file-accept', fileId: fileId }); fileStatus.textContent = 'Receiving: ' + name; addLog('Accepted file ' + fileId + ' from ' + conn.peer) } },
+                { label: 'Reject', cls: 'btn-danger', onclick: () => { conn.send({ type: 'file-reject', fileId: fileId }); addLog('Rejected file ' + fileId + ' from ' + conn.peer) } }
+            ]
+        })
+        return
+    }
+
+    if (data.type === 'file-chunk') {
+        const id = data.fileId; const chunk = data.chunk; const pin = conn._incoming && conn._incoming[id]
+        if (pin) { pin.chunks.push(chunk); pin.size += (chunk.byteLength || chunk.length || 0) }
+        return
+    }
+
+    if (data.type === 'file-end') {
+        const id = data.fileId; const p = conn._incoming && conn._incoming[id]
+        if (!p) return
+        const blob = new Blob(p.chunks);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = p.meta.name; a.textContent = 'Download ' + p.meta.name; a.className = 'd-block mt-2'
+        incomingArea.appendChild(a)
+        fileStatus.textContent = 'Received: ' + p.meta.name
+        addLog('Received file ' + p.meta.name + ' from ' + conn.peer)
+        delete conn._incoming[id]
+        return
+    }
+
+    if (data.type === 'file-accept') {
+        const meta = pendingFiles && pendingFiles[data.fileId]
+        if (meta) { addLog('Peer accepted file: ' + data.fileId + ' -> sending chunks to ' + conn.peer); sendFileChunksToConn(conn, meta) }
+        return
+    }
+
+    if (data.type === 'file-reject') { fileStatus.textContent = 'Receiver rejected the file'; addLog('Peer rejected file ' + data.fileId) }
+}
+
+function evaluateMode() {
+    const peerCount = Object.keys(peers).length + 1;
+    if (peerCount >= 2) {
+        setMode('file-sharing');
+        chatFileSection.classList.remove('d-none'); // Show when someone joins
+    } else {
+        setMode('waiting');
+        chatFileSection.classList.add('d-none'); // Hide when alone
+    }
+}
+
+// Chat send
+sendBtn.addEventListener('click', () => { const text = textIn.value.trim(); if (!text) return; addMsg(text, 'me'); broadcast({ type: 'chat', text }); textIn.value = ''; addLog('Sent chat: ' + text) })
+textIn.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click() })
+
+function broadcast(obj) { for (const id in peers) { try { peers[id].send(obj) } catch (e) { addLog('Broadcast error to ' + id) } } }
+
+// File sending
+fileInput.addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return; const id = 'f_' + uid(8); pendingFiles[id] = { file: f, meta: { fileId: id, name: f.name, size: f.size } }; fileStatus.textContent = 'Offering: ' + f.name; addLog('Offering file ' + f.name)
+    broadcast({ type: 'file-meta', fileId: id, name: f.name, size: f.size })
+})
+
+async function sendFileChunksToConn(conn, fmeta) {
+    const file = fmeta.file; const chunkSize = 64 * 1024; const total = file.size; let offset = 0; const reader = new FileReader()
+    function readSlice(o) { const slice = file.slice(o, o + chunkSize); reader.readAsArrayBuffer(slice) }
+    reader.onload = e => {
+        const buf = e.target.result; try { conn.send({ type: 'file-chunk', fileId: fmeta.meta.fileId, chunk: buf }) } catch (err) { addLog('Chunk send error: ' + err) }
+        offset += buf.byteLength; if (offset < total) readSlice(offset); else { conn.send({ type: 'file-end', fileId: fmeta.meta.fileId }); fileStatus.textContent = 'Sent: ' + file.name; addLog('Sent file ' + file.name); delete pendingFiles[fmeta.meta.fileId] }
+    }
+    readSlice(0)
+}
+
+// init
+updateHostAttempt()
+
+// expose for debug
+window._dbg = { peer, peers }
+
