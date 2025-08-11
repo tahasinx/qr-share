@@ -40,11 +40,29 @@ const clearLogsBtn = document.getElementById('clearLogs')
 new QRCode(qrcodeEl, { text: link, width: 160, height: 160 })
 roomUrlEl.textContent = link
 
-copyBtn.addEventListener('click', async () => { await navigator.clipboard.writeText(link); copyBtn.textContent = 'Copied ✓'; setTimeout(() => copyBtn.textContent = 'Copy link', 1400) })
-regenBtn.addEventListener('click', () => { room = uid(6); link = makeRoomLink(room); roomUrlEl.textContent = link; qrcodeEl.innerHTML = ''; new QRCode(qrcodeEl, { text: link, width: 160, height: 160 }); updateHostAttempt() })
+copyBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(link);
+    copyBtn.textContent = 'Copied ✓';
+    setTimeout(() => copyBtn.textContent = 'Copy link', 1400)
+})
+
+regenBtn.addEventListener('click', () => {
+    room = uid(6);
+    link = makeRoomLink(room);
+    roomUrlEl.textContent = link;
+    qrcodeEl.innerHTML = '';
+    new QRCode(qrcodeEl, { text: link, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.H });
+    updateHostAttempt()
+})
+
 clearLogsBtn.addEventListener('click', () => logsEl.innerHTML = '')
 
-function addLog(text) { const d = document.createElement('div'); d.textContent = (new Date()).toLocaleTimeString() + ' — ' + text; logsEl.appendChild(d); logsEl.scrollTop = logsEl.scrollHeight }
+function addLog(text) {
+    const d = document.createElement('div');
+    d.textContent = (new Date()).toLocaleTimeString() + ' — ' + text;
+    logsEl.appendChild(d);
+    logsEl.scrollTop = logsEl.scrollHeight
+}
 
 function showToast(opts) { // {title,msg,autohide,delay,actions:[{label,cls,onclick}]}
     const id = 't_' + uid(6);
@@ -78,14 +96,24 @@ function showToast(opts) { // {title,msg,autohide,delay,actions:[{label,cls,oncl
     return { id, el: wrapper, bs };
 }
 
-
 // ---- PeerJS logic (adapted) ----
 const peers = {}
 let peer = null
 let amHost = false
 let pendingFiles = {}
 
-function addMsg(text, who) { const d = document.createElement('div'); d.className = 'msg ' + (who === 'me' ? 'me' : 'them'); d.textContent = text; messagesEl.appendChild(d); messagesEl.scrollTop = messagesEl.scrollHeight }
+// *** BATCHING MOD START ***
+const incomingBatches = {} // batchId => { files: [], conn, timeoutId }
+// *** BATCHING MOD END ***
+
+function addMsg(text, who) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + (who === 'me' ? 'me' : 'them');
+    d.textContent = text;
+    messagesEl.appendChild(d);
+    messagesEl.scrollTop = messagesEl.scrollHeight
+}
+
 function setMode(m) { modeEl.textContent = m }
 function setPeersCount(n) { peersCountEl.textContent = 'Peers: ' + n }
 
@@ -100,19 +128,26 @@ function updateHostAttempt() {
 
     peer.on('open', id => {
         addLog('Peer open: ' + id)
-        // show chat/file UI once peer ready
         chatFileSection.classList.remove('d-none')
-        if (!amHost) { const conn = peer.connect(room); setupConn(conn) }
+        if (!amHost) {
+            const conn = peer.connect(room);
+            setupConn(conn)
+        }
         setPeersCount(Object.keys(peers).length + 1)
         showToast({ title: 'Peer ready', msg: 'Peer ID: ' + id, autohide: true, delay: 2500 })
     })
 
-    peer.on('connection', conn => { addLog('Incoming connection from ' + conn.peer); setupConn(conn); showToast({ title: 'Peer connected', msg: conn.peer, autohide: true, delay: 2200 }) })
+    peer.on('connection', conn => {
+        addLog('Incoming connection from ' + conn.peer);
+        setupConn(conn);
+        showToast({ title: 'Peer connected', msg: conn.peer, autohide: true, delay: 2200 })
+    })
 
     peer.on('disconnected', () => { addLog('Peer disconnected'); showToast({ title: 'Disconnected', msg: 'Signaling disconnected', autohide: true }) })
     peer.on('close', () => { addLog('Peer closed'); showToast({ title: 'Closed', msg: 'Peer connection closed', autohide: true }) })
     peer.on('error', err => {
-        addLog('Peer error: ' + (err && err.type ? err.type : err)); showToast({ title: 'Peer error', msg: String(err), autohide: true })
+        addLog('Peer error: ' + (err && err.type ? err.type : err));
+        showToast({ title: 'Peer error', msg: String(err), autohide: true })
         if (err && (err.type === 'unavailable-id' || err.type === 'peer-unavailable')) {
             try { peer.destroy() } catch (e) { }
             peer = new Peer(undefined, PEER_OPTS); amHost = false
@@ -133,7 +168,14 @@ function setupConn(conn) {
         showToast({ title: 'Connected', msg: 'Peer ' + conn.peer, autohide: true, delay: 2000 })
     })
     conn.on('data', data => handleData(conn, data))
-    conn.on('close', () => { delete peers[conn.peer]; setPeersCount(Object.keys(peers).length + 1); addLog('Connection closed: ' + conn.peer); addMsg('Peer left: ' + conn.peer, 'them'); evaluateMode(); showToast({ title: 'Peer left', msg: conn.peer, autohide: true }) })
+    conn.on('close', () => {
+        delete peers[conn.peer];
+        setPeersCount(Object.keys(peers).length + 1);
+        addLog('Connection closed: ' + conn.peer);
+        addMsg('Peer left: ' + conn.peer, 'them');
+        evaluateMode();
+        showToast({ title: 'Peer left', msg: conn.peer, autohide: true })
+    })
 }
 
 function handleData(conn, data) {
@@ -142,49 +184,107 @@ function handleData(conn, data) {
     if (data.type === 'chat') { addMsg(data.text, 'them'); addLog('Chat from ' + conn.peer + ': ' + data.text); return }
 
     if (data.type === 'file-meta') {
-        // incoming file offer -> show toast with accept/reject
-        const fileId = data.fileId, name = data.name, size = data.size
-        addLog('Incoming file offer from ' + conn.peer + ': ' + name + ' (' + Math.round(size / 1024) + ' KB)')
-        // store incoming state on conn
-        conn._incoming = conn._incoming || {}
-        conn._incoming[fileId] = { chunks: [], size: 0, meta: data }
-
-        showToast({
-            title: 'Incoming file', msg: `${name} (${Math.round(size / 1024)} KB) from ${conn.peer}`, autohide: false,
-            actions: [
-                { label: 'Accept', cls: 'btn-success', onclick: () => { conn.send({ type: 'file-accept', fileId: fileId }); fileStatus.textContent = 'Receiving: ' + name; addLog('Accepted file ' + fileId + ' from ' + conn.peer) } },
-                { label: 'Reject', cls: 'btn-danger', onclick: () => { conn.send({ type: 'file-reject', fileId: fileId }); addLog('Rejected file ' + fileId + ' from ' + conn.peer) } }
-            ]
-        })
-        return
+        // *** BATCHING MOD START ***
+        const batchId = data.batchId || ('single_' + data.fileId);
+        if (!incomingBatches[batchId]) {
+            incomingBatches[batchId] = { files: [], conn, timeoutId: null };
+            incomingBatches[batchId].timeoutId = setTimeout(() => {
+                const batch = incomingBatches[batchId];
+                if (!batch) return;
+                showBatchToast(batch.conn, batch.files, batchId);
+                delete incomingBatches[batchId];
+            }, 500); // 500ms to batch offers
+        }
+        incomingBatches[batchId].files.push(data);
+        addLog(`Queued file offer ${data.name} from ${conn.peer} (batch ${batchId})`);
+        // *** BATCHING MOD END ***
+        return;
     }
 
     if (data.type === 'file-chunk') {
-        const id = data.fileId; const chunk = data.chunk; const pin = conn._incoming && conn._incoming[id]
-        if (pin) { pin.chunks.push(chunk); pin.size += (chunk.byteLength || chunk.length || 0) }
+        const id = data.fileId;
+        let chunk = data.chunk;
+        const pin = conn._incoming && conn._incoming[id];
+        if (pin) {
+            if (!(chunk instanceof ArrayBuffer)) {
+                if (chunk.data) {
+                    chunk = new Uint8Array(chunk.data).buffer;
+                }
+            }
+            pin.chunks.push(chunk);
+            pin.size += (chunk.byteLength || chunk.length || 0);
+        }
         return
     }
 
     if (data.type === 'file-end') {
-        const id = data.fileId; const p = conn._incoming && conn._incoming[id]
-        if (!p) return
+        const id = data.fileId;
+        const p = conn._incoming && conn._incoming[id];
+        if (!p) return;
         const blob = new Blob(p.chunks);
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = p.meta.name; a.textContent = 'Download ' + p.meta.name; a.className = 'd-block mt-2'
-        incomingArea.appendChild(a)
-        fileStatus.textContent = 'Received: ' + p.meta.name
-        addLog('Received file ' + p.meta.name + ' from ' + conn.peer)
-        delete conn._incoming[id]
-        return
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = p.meta.name;
+        a.textContent = 'Download ' + p.meta.name;
+        a.className = 'd-block mt-2';
+        incomingArea.appendChild(a);
+        fileStatus.textContent = 'Received: ' + p.meta.name;
+        addLog('Received file ' + p.meta.name + ' from ' + conn.peer);
+        delete conn._incoming[id];
+        return;
     }
 
     if (data.type === 'file-accept') {
-        const meta = pendingFiles && pendingFiles[data.fileId]
-        if (meta) { addLog('Peer accepted file: ' + data.fileId + ' -> sending chunks to ' + conn.peer); sendFileChunksToConn(conn, meta) }
-        return
+        const meta = pendingFiles && pendingFiles[data.fileId];
+        if (meta) {
+            addLog('Peer accepted file: ' + data.fileId + ' -> sending chunks to ' + conn.peer);
+            sendFileChunksToConn(conn, meta)
+        }
+        return;
     }
 
-    if (data.type === 'file-reject') { fileStatus.textContent = 'Receiver rejected the file'; addLog('Peer rejected file ' + data.fileId) }
+    if (data.type === 'file-reject') {
+        fileStatus.textContent = 'Receiver rejected the file';
+        addLog('Peer rejected file ' + data.fileId)
+    }
+}
+
+function showBatchToast(conn, files, batchId) {
+    const fileListHtml = files.map(f => {
+        const maxNameLength = 30;
+        const displayName = f.name.length > maxNameLength ? f.name.slice(0, maxNameLength) + '…' : f.name;
+        return `${displayName} (${Math.round(f.size / 1024)} KB)`;
+    }).join('<br>');
+
+    showToast({
+        title: `Incoming ${files.length} file${files.length > 1 ? 's' : ''}`,
+        msg: fileListHtml,
+        autohide: false,
+        actions: [
+            {
+                label: 'Accept',
+                cls: 'btn-success',
+                onclick: () => {
+                    files.forEach(f => {
+                        conn.send({ type: 'file-accept', fileId: f.fileId });
+                        conn._incoming = conn._incoming || {};
+                        conn._incoming[f.fileId] = { chunks: [], size: 0, meta: f };
+                    });
+                    fileStatus.textContent = `Receiving ${files.length} file${files.length > 1 ? 's' : ''}`;
+                    addLog(`Accepted batch ${batchId} from ${conn.peer}`);
+                }
+            },
+            {
+                label: 'Reject',
+                cls: 'btn-danger',
+                onclick: () => {
+                    files.forEach(f => conn.send({ type: 'file-reject', fileId: f.fileId }));
+                    addLog(`Rejected batch ${batchId} from ${conn.peer}`);
+                }
+            }
+        ]
+    });
 }
 
 function evaluateMode() {
@@ -199,25 +299,83 @@ function evaluateMode() {
 }
 
 // Chat send
-sendBtn.addEventListener('click', () => { const text = textIn.value.trim(); if (!text) return; addMsg(text, 'me'); broadcast({ type: 'chat', text }); textIn.value = ''; addLog('Sent chat: ' + text) })
-textIn.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click() })
-
-function broadcast(obj) { for (const id in peers) { try { peers[id].send(obj) } catch (e) { addLog('Broadcast error to ' + id) } } }
-
-// File sending
-fileInput.addEventListener('change', e => {
-    const f = e.target.files[0]; if (!f) return; const id = 'f_' + uid(8); pendingFiles[id] = { file: f, meta: { fileId: id, name: f.name, size: f.size } }; fileStatus.textContent = 'Offering: ' + f.name; addLog('Offering file ' + f.name)
-    broadcast({ type: 'file-meta', fileId: id, name: f.name, size: f.size })
+sendBtn.addEventListener('click', () => {
+    const text = textIn.value.trim();
+    if (!text) return;
+    addMsg(text, 'me');
+    broadcast({ type: 'chat', text });
+    textIn.value = '';
+    addLog('Sent chat: ' + text)
 })
 
-async function sendFileChunksToConn(conn, fmeta) {
-    const file = fmeta.file; const chunkSize = 64 * 1024; const total = file.size; let offset = 0; const reader = new FileReader()
-    function readSlice(o) { const slice = file.slice(o, o + chunkSize); reader.readAsArrayBuffer(slice) }
-    reader.onload = e => {
-        const buf = e.target.result; try { conn.send({ type: 'file-chunk', fileId: fmeta.meta.fileId, chunk: buf }) } catch (err) { addLog('Chunk send error: ' + err) }
-        offset += buf.byteLength; if (offset < total) readSlice(offset); else { conn.send({ type: 'file-end', fileId: fmeta.meta.fileId }); fileStatus.textContent = 'Sent: ' + file.name; addLog('Sent file ' + file.name); delete pendingFiles[fmeta.meta.fileId] }
+textIn.addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendBtn.click()
+})
+
+function broadcast(obj) {
+    for (const id in peers) {
+        try { peers[id].send(obj) } catch (e) { addLog('Broadcast error to ' + id) }
     }
-    readSlice(0)
+}
+
+// *** BATCHING MOD START ***
+// File sending with multiple files and batchId
+fileInput.setAttribute('multiple', 'multiple')
+fileInput.addEventListener('change', e => {
+    const files = e.target.files;
+    if (!files.length) return;
+
+    const batchId = uid(8);
+
+    fileStatus.textContent = `Offering ${files.length} file${files.length > 1 ? 's' : ''}`;
+    addLog(`Offering ${files.length} files as batch ${batchId}`);
+
+    for (const f of files) {
+        const id = 'f_' + uid(8);
+        pendingFiles[id] = { file: f, meta: { fileId: id, name: f.name, size: f.size, batchId } };
+        broadcast({ type: 'file-meta', fileId: id, name: f.name, size: f.size, batchId });
+    }
+})
+// *** BATCHING MOD END ***
+
+async function sendFileChunksToConn(conn, fmeta) {
+    const file = fmeta.file;
+    const chunkSize = 64 * 1024; // 64KB chunks
+    const total = file.size;
+    let offset = 0;
+    const reader = new FileReader();
+
+    function readSlice(o) {
+        const slice = file.slice(o, o + chunkSize);
+        reader.readAsArrayBuffer(slice);
+    }
+
+    reader.onload = async e => {
+        const buf = e.target.result;
+        if (!conn.open) {
+            addLog('Connection closed during file send');
+            return;
+        }
+        try {
+            conn.send({ type: 'file-chunk', fileId: fmeta.meta.fileId, chunk: buf });
+        } catch (err) {
+            addLog('Chunk send error: ' + err);
+            return;
+        }
+        offset += buf.byteLength;
+        if (offset < total) {
+            // Delay to prevent flooding the channel
+            await new Promise(r => setTimeout(r, 20));
+            readSlice(offset);
+        } else {
+            conn.send({ type: 'file-end', fileId: fmeta.meta.fileId });
+            fileStatus.textContent = 'Sent: ' + file.name;
+            addLog('Sent file ' + file.name);
+            delete pendingFiles[fmeta.meta.fileId];
+        }
+    };
+
+    readSlice(0);
 }
 
 // init
@@ -225,4 +383,3 @@ updateHostAttempt()
 
 // expose for debug
 window._dbg = { peer, peers }
-
