@@ -98,6 +98,41 @@ body {
     height: 160px
 }
 
+/* Truncate long file names in file sharing UI */
+.truncate-filename {
+    display       : inline-block;
+    max-width     : 180px;
+    overflow      : hidden;
+    text-overflow : ellipsis;
+    white-space   : nowrap;
+    vertical-align: middle;
+}
+
+/* Loading indicator for file-container */
+.file-loading {
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    min-height     : 80px;
+    width          : 100%;
+    color          : #888;
+    font-size      : 1rem;
+}
+
+/* Accept/Reject button group for file transfer prompt */
+.file-action-btns {
+    display        : flex;
+    gap            : 0.5rem;
+    margin-bottom  : 0.5rem;
+    justify-content: center;
+}
+
+.file-action-btns .btn {
+    min-width: 80px;
+    font-size: 0.95rem;
+    padding  : 0.25rem 0.75rem;
+}
+
 @media(max-width:991px) {
     .messages {
         height: 260px

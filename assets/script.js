@@ -104,6 +104,8 @@ let pendingFiles = {}
 
 // *** BATCHING MOD START ***
 const incomingBatches = {} // batchId => { files: [], conn, timeoutId }
+// Track how many files are expected in a batch and how many have been received
+const incomingBatchStatus = {};
 // *** BATCHING MOD END ***
 
 function addMsg(text, who) {
@@ -191,6 +193,8 @@ function handleData(conn, data) {
             incomingBatches[batchId].timeoutId = setTimeout(() => {
                 const batch = incomingBatches[batchId];
                 if (!batch) return;
+                // Track expected files for this batch
+                incomingBatchStatus[batchId] = { expected: batch.files.length, received: 0 };
                 showBatchToast(batch.conn, batch.files, batchId);
                 delete incomingBatches[batchId];
             }, 500); // 500ms to batch offers
@@ -228,10 +232,23 @@ function handleData(conn, data) {
         a.download = p.meta.name;
         a.textContent = 'Download ' + p.meta.name;
         a.className = 'd-block mt-2';
+        // Remove only the loading indicator, not the file links
+        const loadingEl = incomingArea.querySelector('.file-loading');
+        if (loadingEl) loadingEl.remove();
         incomingArea.appendChild(a);
         fileStatus.textContent = 'Received: ' + p.meta.name;
         addLog('Received file ' + p.meta.name + ' from ' + conn.peer);
         delete conn._incoming[id];
+        // Batch tracking: increment received count and hide loading only when all files are received
+        const batchId = p.meta.batchId || ('single_' + id);
+        if (incomingBatchStatus[batchId]) {
+            incomingBatchStatus[batchId].received++;
+            if (incomingBatchStatus[batchId].received >= incomingBatchStatus[batchId].expected) {
+                // Only remove loading, do not clear file links
+                // (handled above)
+                delete incomingBatchStatus[batchId];
+            }
+        }
         return;
     }
 
@@ -254,17 +271,25 @@ function showBatchToast(conn, files, batchId) {
     const fileListHtml = files.map(f => {
         const maxNameLength = 30;
         const displayName = f.name.length > maxNameLength ? f.name.slice(0, maxNameLength) + '…' : f.name;
-        return `${displayName} (${Math.round(f.size / 1024)} KB)`;
+        return `<span class="truncate-filename" title="${f.name}">${displayName}</span> (${Math.round(f.size / 1024)} KB)`;
     }).join('<br>');
+
+    // Accept/Reject buttons above file list
+    const actionsHtml = `
+        <div class="file-action-btns btn-group">
+            <button data-act='0' class='btn btn-success btn-sm'>Accept</button>
+            <button data-act='1' class='btn btn-danger btn-sm'>Reject</button>
+        </div>
+    `;
 
     showToast({
         title: `Incoming ${files.length} file${files.length > 1 ? 's' : ''}`,
-        msg: fileListHtml,
+        msg: actionsHtml + fileListHtml,
         autohide: false,
         actions: [
             {
-                label: 'Accept',
-                cls: 'btn-success',
+                label: '', // Accept button handled by custom HTML
+                cls: '',
                 onclick: () => {
                     files.forEach(f => {
                         conn.send({ type: 'file-accept', fileId: f.fileId });
@@ -273,18 +298,51 @@ function showBatchToast(conn, files, batchId) {
                     });
                     fileStatus.textContent = `Receiving ${files.length} file${files.length > 1 ? 's' : ''}`;
                     addLog(`Accepted batch ${batchId} from ${conn.peer}`);
-                }
+                },
+                dismiss: true
             },
             {
-                label: 'Reject',
-                cls: 'btn-danger',
+                label: '', // Reject button handled by custom HTML
+                cls: '',
                 onclick: () => {
                     files.forEach(f => conn.send({ type: 'file-reject', fileId: f.fileId }));
                     addLog(`Rejected batch ${batchId} from ${conn.peer}`);
-                }
+                },
+                dismiss: true
             }
         ]
     });
+    // Attach event listeners for custom Accept/Reject buttons
+    setTimeout(() => {
+        const toastBody = document.querySelector('.toast-body');
+        if (toastBody) {
+            const acceptBtn = toastBody.querySelector("button[data-act='0']");
+            const rejectBtn = toastBody.querySelector("button[data-act='1'] ");
+            // Find the toast element and its Toast instance
+            const toastEl = toastBody.closest('.toast');
+            let bsToast = null;
+            if (toastEl) {
+                bsToast = bootstrap.Toast.getOrCreateInstance(toastEl);
+            }
+            if (acceptBtn) acceptBtn.onclick = () => {
+                files.forEach(f => {
+                    conn.send({ type: 'file-accept', fileId: f.fileId });
+                    conn._incoming = conn._incoming || {};
+                    conn._incoming[f.fileId] = { chunks: [], size: 0, meta: f };
+                });
+                fileStatus.textContent = `Receiving ${files.length} file${files.length > 1 ? 's' : ''}`;
+                addLog(`Accepted batch ${batchId} from ${conn.peer}`);
+                if (bsToast) bsToast.hide();
+                // Show loading when waiting for files
+                setFileLoading(true);
+            };
+            if (rejectBtn) rejectBtn.onclick = () => {
+                files.forEach(f => conn.send({ type: 'file-reject', fileId: f.fileId }));
+                addLog(`Rejected batch ${batchId} from ${conn.peer}`);
+                if (bsToast) bsToast.hide();
+            };
+        }
+    }, 100);
 }
 
 function evaluateMode() {
@@ -376,6 +434,14 @@ async function sendFileChunksToConn(conn, fmeta) {
     };
 
     readSlice(0);
+}
+
+function setFileLoading(loading) {
+    if (loading) {
+        incomingArea.innerHTML = '<div class="file-loading">Waiting for incoming files...</div>';
+    } else {
+        incomingArea.innerHTML = '';
+    }
 }
 
 // init
