@@ -24,7 +24,7 @@
 
 ## 🖥️ Live Demo
 
-> _Host yourself locally or deploy to any static web server._
+> https://tahasinx.github.io/qr-share
 
 ---
 
