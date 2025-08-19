@@ -2,11 +2,37 @@
 const PEER_OPTS = {
     config: {
         iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            // demo TURN (replace in production)
-            { urls: 'turn:relay1.expressturn.com:3478', username: 'efree', credential: 'expreSSTURN2023' }
+            // Google STUN
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:stun3.l.google.com:19302" },
+            { urls: "stun:stun4.l.google.com:19302" },
+
+            // Metered STUN
+            { urls: "stun:stun.relay.metered.ca:80" },
+
+            // Metered TURN (UDP + TCP + TLS)
+            {
+                urls: "turn:global.relay.metered.ca:80",
+                username: "11ce86125f24f22799572088",
+                credential: "wHvY1DUIlFOSnXnp"
+            },
+            {
+                urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                username: "11ce86125f24f22799572088",
+                credential: "wHvY1DUIlFOSnXnp"
+            },
+            {
+                urls: "turn:global.relay.metered.ca:443",
+                username: "11ce86125f24f22799572088",
+                credential: "wHvY1DUIlFOSnXnp"
+            },
+            {
+                urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                username: "11ce86125f24f22799572088",
+                credential: "wHvY1DUIlFOSnXnp"
+            }
         ]
     }
 }
