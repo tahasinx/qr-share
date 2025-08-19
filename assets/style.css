@@ -139,6 +139,14 @@ body {
     }
 }
 
+#incomingArea a:active {
+    color: orange;
+}
+
+#incomingArea a:visited {
+    color: orange;
+}
+
 .footer {
     position   : fixed;
     bottom     : 0;
