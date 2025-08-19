@@ -475,3 +475,9 @@ updateHostAttempt()
 
 // expose for debug
 window._dbg = { peer, peers }
+
+incomingArea.addEventListener('click', e => {
+    if (e.target.tagName.toLowerCase() === 'a') {
+        e.target.style.color = 'orange';
+    }
+});
