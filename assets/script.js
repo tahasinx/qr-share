@@ -251,7 +251,7 @@ function handleData(conn, data) {
         const id = data.fileId;
         const p = conn._incoming && conn._incoming[id];
         if (!p) return;
-        const blob = new Blob(p.chunks, { type: (p.meta && p.meta.type) ? p.meta.type : 'application/octet-stream' });
+        const blob = new Blob(p.chunks);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -416,8 +416,8 @@ fileInput.addEventListener('change', e => {
 
     for (const f of files) {
         const id = 'f_' + uid(8);
-        pendingFiles[id] = { file: f, meta: { fileId: id, name: f.name, size: f.size, batchId, type: f.type } };
-        broadcast({ type: 'file-meta', fileId: id, name: f.name, size: f.size, batchId, type: f.type });
+        pendingFiles[id] = { file: f, meta: { fileId: id, name: f.name, size: f.size, batchId } };
+        broadcast({ type: 'file-meta', fileId: id, name: f.name, size: f.size, batchId });
     }
 })
 // *** BATCHING MOD END ***
