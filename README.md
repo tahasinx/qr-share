@@ -8,6 +8,7 @@
 
 - **Peer-to-peer file sharing:**
   - Send one or multiple files directly to connected peers. No files are stored on any server.
+  - **WebRTC-optimized:** 16KB chunks (DataChannel-safe), max 100MB per file, optional file-type blocklist for reliability.
 - **Text chat:**
   - Send messages to everyone in the room, instantly and privately.
 - **Room-based sharing:**
@@ -135,7 +136,8 @@ project_qrshare/
   - Increase its size and use a solid background for better contrast.
 - **File transfer not working?**
   - Ensure both peers are connected (see "Peers" count).
-  - Try smaller files first.
+  - Use files under 100MB; chunks are sent at 16KB for WebRTC compatibility.
+  - Blocked types (e.g. .exe) are rejected; check the toast for validation errors.
   - Check browser console for errors.
 - **PeerJS connection issues?**
   - The free PeerJS server may have limits. For production, deploy your own PeerJS server.

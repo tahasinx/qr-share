@@ -1,4 +1,13 @@
 // ---- CONFIG ----
+// File transfer: WebRTC DataChannel safe message size is 16KB cross-browser (Chrome/Firefox).
+// Larger chunks can cause silent failures or connection drops.
+const FILE_TRANSFER_CHUNK_SIZE = 16 * 1024; // 16KB - do not increase for WebRTC reliability
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB - keeps memory and transfer time reasonable
+const MAX_FILES_PER_BATCH = 20;
+const CHUNK_SEND_DELAY_MS = 25; // Backpressure: avoid DataChannel buffer overflow
+// Block dangerous executable types (optional; empty array = allow all)
+const BLOCKED_EXTENSIONS = ['exe', 'bat', 'cmd', 'com', 'msi', 'dll', 'scr', 'vbs', 'jar', 'app'];
+
 const PEER_OPTS = {
     config: {
         iceServers: [
@@ -40,6 +49,26 @@ const PEER_OPTS = {
 // ---- Helpers & UI refs ----
 function uid(len = 6) { return Math.random().toString(36).slice(2, 2 + len) }
 function getParam(name) { const u = new URL(location.href); return u.searchParams.get(name) }
+
+/** Validate file for WebRTC transfer: size and type. Returns { valid: boolean, reason?: string } */
+function validateFileForTransfer(file) {
+    if (file.size === 0) return { valid: false, reason: 'Empty file' };
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        const maxMB = Math.round(MAX_FILE_SIZE_BYTES / (1024 * 1024));
+        return { valid: false, reason: `Max ${maxMB}MB (${(file.size / (1024 * 1024)).toFixed(1)}MB)` };
+    }
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (BLOCKED_EXTENSIONS.length && BLOCKED_EXTENSIONS.includes(ext)) {
+        return { valid: false, reason: 'File type not allowed' };
+    }
+    return { valid: true };
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
 
 let room = getParam('room') || uid(6)
 function makeRoomLink(r) { return location.origin + location.pathname + '?room=' + r }
@@ -219,9 +248,19 @@ function handleData(conn, data) {
             incomingBatches[batchId].timeoutId = setTimeout(() => {
                 const batch = incomingBatches[batchId];
                 if (!batch) return;
-                // Track expected files for this batch
-                incomingBatchStatus[batchId] = { expected: batch.files.length, received: 0 };
-                showBatchToast(batch.conn, batch.files, batchId);
+                const validFiles = batch.files.filter(f => f.size > 0 && f.size <= MAX_FILE_SIZE_BYTES);
+                const oversized = batch.files.filter(f => f.size > MAX_FILE_SIZE_BYTES);
+                oversized.forEach(f => {
+                    conn.send({ type: 'file-reject', fileId: f.fileId });
+                    addLog(`Rejected ${f.name}: too large (max ${formatFileSize(MAX_FILE_SIZE_BYTES)})`);
+                });
+                if (validFiles.length === 0) {
+                    delete incomingBatches[batchId];
+                    if (oversized.length) showToast({ title: 'Files skipped', msg: 'Too large (max ' + formatFileSize(MAX_FILE_SIZE_BYTES) + ')', autohide: true });
+                    return;
+                }
+                incomingBatchStatus[batchId] = { expected: validFiles.length, received: 0 };
+                showBatchToast(batch.conn, validFiles, batchId);
                 delete incomingBatches[batchId];
             }, 500); // 500ms to batch offers
         }
@@ -235,16 +274,16 @@ function handleData(conn, data) {
         const id = data.fileId;
         let chunk = data.chunk;
         const pin = conn._incoming && conn._incoming[id];
-        if (pin) {
-            if (!(chunk instanceof ArrayBuffer)) {
-                if (chunk.data) {
-                    chunk = new Uint8Array(chunk.data).buffer;
-                }
-            }
-            pin.chunks.push(chunk);
-            pin.size += (chunk.byteLength || chunk.length || 0);
+        if (!pin) return;
+        if (!(chunk instanceof ArrayBuffer)) {
+            if (chunk && chunk.data) chunk = new Uint8Array(chunk.data).buffer;
+            else return;
         }
-        return
+        const len = chunk.byteLength || 0;
+        if (pin.size + len > pin.meta.size) return; // Cap at declared size (safety)
+        pin.chunks.push(chunk);
+        pin.size += len;
+        return;
     }
 
     if (data.type === 'file-end') {
@@ -258,20 +297,16 @@ function handleData(conn, data) {
         a.download = p.meta.name;
         a.textContent = 'Download ' + p.meta.name;
         a.className = 'd-block mt-2';
-        // Remove only the loading indicator, not the file links
         const loadingEl = incomingArea.querySelector('.file-loading');
         if (loadingEl) loadingEl.remove();
         incomingArea.appendChild(a);
         fileStatus.textContent = 'Received: ' + p.meta.name;
         addLog('Received file ' + p.meta.name + ' from ' + conn.peer);
         delete conn._incoming[id];
-        // Batch tracking: increment received count and hide loading only when all files are received
         const batchId = p.meta.batchId || ('single_' + id);
         if (incomingBatchStatus[batchId]) {
             incomingBatchStatus[batchId].received++;
             if (incomingBatchStatus[batchId].received >= incomingBatchStatus[batchId].expected) {
-                // Only remove loading, do not clear file links
-                // (handled above)
                 delete incomingBatchStatus[batchId];
             }
         }
@@ -297,7 +332,7 @@ function showBatchToast(conn, files, batchId) {
     const fileListHtml = files.map(f => {
         const maxNameLength = 30;
         const displayName = f.name.length > maxNameLength ? f.name.slice(0, maxNameLength) + '…' : f.name;
-        return `<span class="truncate-filename" title="${f.name}">${displayName}</span> (${Math.round(f.size / 1024)} KB)`;
+        return `<span class="truncate-filename" title="${f.name}">${displayName}</span> (${formatFileSize(f.size)})`;
     }).join('<br>');
 
     // Accept/Reject buttons above file list
@@ -403,34 +438,49 @@ function broadcast(obj) {
 }
 
 // *** BATCHING MOD START ***
-// File sending with multiple files and batchId
+// File sending: only possible file types and sizes for 100% WebRTC success
 fileInput.setAttribute('multiple', 'multiple')
 fileInput.addEventListener('change', e => {
     const files = e.target.files;
     if (!files.length) return;
 
-    const batchId = uid(8);
-
-    fileStatus.textContent = `Offering ${files.length} file${files.length > 1 ? 's' : ''}`;
-    addLog(`Offering ${files.length} files as batch ${batchId}`);
-
+    const validFiles = [];
+    const errors = [];
     for (const f of files) {
+        const check = validateFileForTransfer(f);
+        if (check.valid) validFiles.push(f);
+        else errors.push(f.name + ': ' + check.reason);
+    }
+    if (errors.length) {
+        showToast({ title: 'File(s) skipped', msg: errors.join('<br>'), autohide: true, delay: 8000 });
+    }
+    if (validFiles.length === 0) return;
+    if (validFiles.length > MAX_FILES_PER_BATCH) {
+        showToast({ title: 'Too many files', msg: `Max ${MAX_FILES_PER_BATCH} per batch`, autohide: true });
+        return;
+    }
+
+    const batchId = uid(8);
+    fileStatus.textContent = `Offering ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}`;
+    addLog(`Offering ${validFiles.length} files as batch ${batchId}`);
+
+    for (const f of validFiles) {
         const id = 'f_' + uid(8);
         pendingFiles[id] = { file: f, meta: { fileId: id, name: f.name, size: f.size, batchId } };
         broadcast({ type: 'file-meta', fileId: id, name: f.name, size: f.size, batchId });
     }
+    e.target.value = '';
 })
 // *** BATCHING MOD END ***
 
 async function sendFileChunksToConn(conn, fmeta) {
     const file = fmeta.file;
-    const chunkSize = 64 * 1024; // 64KB chunks
     const total = file.size;
     let offset = 0;
     const reader = new FileReader();
 
     function readSlice(o) {
-        const slice = file.slice(o, o + chunkSize);
+        const slice = file.slice(o, o + FILE_TRANSFER_CHUNK_SIZE);
         reader.readAsArrayBuffer(slice);
     }
 
@@ -438,21 +488,26 @@ async function sendFileChunksToConn(conn, fmeta) {
         const buf = e.target.result;
         if (!conn.open) {
             addLog('Connection closed during file send');
+            delete pendingFiles[fmeta.meta.fileId];
             return;
         }
         try {
             conn.send({ type: 'file-chunk', fileId: fmeta.meta.fileId, chunk: buf });
         } catch (err) {
             addLog('Chunk send error: ' + err);
+            delete pendingFiles[fmeta.meta.fileId];
             return;
         }
         offset += buf.byteLength;
         if (offset < total) {
-            // Delay to prevent flooding the channel
-            await new Promise(r => setTimeout(r, 20));
+            await new Promise(r => setTimeout(r, CHUNK_SEND_DELAY_MS));
             readSlice(offset);
         } else {
-            conn.send({ type: 'file-end', fileId: fmeta.meta.fileId });
+            try {
+                conn.send({ type: 'file-end', fileId: fmeta.meta.fileId });
+            } catch (err) {
+                addLog('File-end send error: ' + err);
+            }
             fileStatus.textContent = 'Sent: ' + file.name;
             addLog('Sent file ' + file.name);
             delete pendingFiles[fmeta.meta.fileId];
