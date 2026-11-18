@@ -26,7 +26,7 @@ export function parseRoomCode(input) {
   let s = String(input).trim();
   try {
     const u = new URL(s);
-    s = u.searchParams.get('room') || (u.hash || '').replace(/^#/, '') || '';
+    s = (u.hash || '').replace(/^#/, '') || u.searchParams.get('room') || '';
   } catch { /* not a URL */ }
   s = s.toUpperCase().replace(/[\s-]/g, '');
   if (s.length !== ROOM_CODE_LENGTH) return null;
@@ -36,15 +36,11 @@ export function parseRoomCode(input) {
 
 export const formatRoomCode = (code) => `${code.slice(0, 5)}-${code.slice(5)}`;
 
-/**
- * Shareable link for a room: `https://host/path/?room=CODE`. A plain query link is recognised as
- * openable by every QR scanner; some stricter scanner apps don't offer to open `#`-only links.
- */
+/** Shareable link for a room: `https://host/path/#CODE`. The fragment never reaches the web server. */
 export function roomLink(code) {
   const u = new URL(location.href);
   u.search = '';
-  u.hash = '';
-  u.searchParams.set('room', code);
+  u.hash = code;
   return u.toString();
 }
 

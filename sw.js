@@ -6,7 +6,7 @@
  * Bump VERSION whenever any shell file changes; the new cache installs in the
  * background and takes over after the user accepts the "new version" prompt.
  */
-const VERSION = 'qrshare-v2.0.1';
+const VERSION = 'qrshare-v2.0.2';
 const SHELL = [
   './',
   'index.html',

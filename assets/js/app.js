@@ -109,10 +109,10 @@ function boot() {
   route({ initial: true });
 }
 
-/** Reads the room from the URL (?room=CODE, or the older #CODE form) and starts it. */
+/** Reads the room from the URL (#CODE, or a ?room=CODE link) and starts it. */
 function route({ initial = false } = {}) {
   const url = new URL(location.href);
-  const raw = url.searchParams.get('room') || url.hash.replace(/^#/, '') || '';
+  const raw = url.hash.replace(/^#/, '') || url.searchParams.get('room') || '';
   if (!raw) {
     const code = newRoomCode();
     history.replaceState(null, '', roomLink(code));
@@ -130,7 +130,7 @@ function route({ initial = false } = {}) {
     });
     return;
   }
-  if (url.toString() !== roomLink(code)) history.replaceState(null, '', roomLink(code)); // canonical ?room= form
+  if (url.toString() !== roomLink(code)) history.replaceState(null, '', roomLink(code)); // canonical #CODE form
   if (session?.code === code && !initial) return;
   startRoom(code, { created: false });
 }
