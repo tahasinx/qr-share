@@ -1,0 +1,20 @@
+{
+  "name": "qrshare",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Peer-to-peer file and message sharing in the browser. Static site; this file only holds dev tooling.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test tests/unit/ && playwright test",
+    "test:unit": "node --test tests/unit/",
+    "test:e2e": "playwright test",
+    "icons": "node scripts/icons.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "1.56.1",
+    "peer": "1.0.2"
+  }
+}
