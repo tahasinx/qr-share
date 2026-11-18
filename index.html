@@ -46,6 +46,9 @@
       </button>
 
       <div class="topbar__actions">
+        <button class="btn btn--quiet btn--sm topbar__install" id="installBtn" type="button" hidden aria-label="Install QRShare as an app">
+          <span data-icon="install" data-size="18"></span><span class="topbar__label">Install app</span>
+        </button>
         <button class="btn btn--quiet btn--sm topbar__join" id="joinBtn" type="button">
           <span data-icon="scan" data-size="18"></span><span class="topbar__label">Join a room</span>
         </button>
@@ -54,6 +57,9 @@
         </button>
         <button class="icon-btn topbar__extra" id="themeBtn" type="button" data-action="theme" aria-label="Theme: match system" title="Theme">
           <span data-icon="system"></span>
+        </button>
+        <button class="icon-btn topbar__more" id="moreBtn" type="button" aria-label="More options" aria-haspopup="dialog" title="More">
+          <span data-icon="more"></span>
         </button>
         <button class="icon-btn" id="leaveBtn" type="button" aria-label="Leave room" title="Leave room">
           <span data-icon="leave"></span>
@@ -117,15 +123,6 @@
             <span data-icon="lock" data-size="14"></span>
             Files and messages travel directly between devices, encrypted in transit.
           </p>
-        </div>
-
-        <div class="room-footer">
-          <button class="btn btn--quiet btn--sm" type="button" data-action="help">
-            <span data-icon="help" data-size="16"></span><span>How it works</span>
-          </button>
-          <button class="btn btn--quiet btn--sm" type="button" data-action="theme" aria-label="Theme: match system">
-            <span data-icon="system" data-size="16"></span><span>Theme</span>
-          </button>
         </div>
       </section>
 

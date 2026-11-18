@@ -34,8 +34,8 @@
 - Join/leave system messages and unread badges.
 
 **App**
-- Light and dark themes (follows the system; remembered when set).
-- Installable PWA with an offline app shell.
+- Light and dark themes (follows the system; remembered when set). On phones, theme and settings live in the ⋮ More menu.
+- Installable PWA with an offline app shell. An **Install app** button uses the browser's own install prompt where available (Chrome, Edge, Samsung Internet) and otherwise shows step-by-step instructions for the device: iPhone/iPad (Add to Home Screen), Android browsers, Mac Safari (Add to Dock) and desktop Chrome/Edge. It explains when a browser can't install (desktop Firefox, in-app browsers). Updates apply automatically when nothing is in progress.
 - Keyboard-operable with visible focus, labelled for screen readers, and respects reduced motion (checked with automated axe tests; not yet tested with a real screen reader).
 - No build step, no frameworks, and no third-party requests besides the signaling and STUN servers.
 
@@ -102,7 +102,7 @@ The end-to-end suite runs real peer-to-peer sessions between isolated browser co
 - Transfers: byte-exact SHA-256 comparison of downloaded files, batches with empty and duplicate files, decline, pause/resume, cancel and retry, peer loss mid-transfer, staged files, multiple recipients, and hostile file names.
 - Chat: XSS payloads, receipts and scroll behaviour.
 - Cross-browser: Chrome ⇄ Firefox connection, chat and verified transfers in both directions (runs when Playwright's Firefox is installed: `npx playwright install firefox`).
-- App: offline start from the service worker, assets loading from the sub-path, theme, copy link and QR download.
+- App: offline start from the service worker, automatic updates without reloading busy tabs, install prompt and per-device install instructions, mobile More menu, assets loading from the sub-path, theme, copy link and QR download.
 - Layout at 320 px through 1920 px including phone landscape, plus axe accessibility checks in both themes.
 
 ---

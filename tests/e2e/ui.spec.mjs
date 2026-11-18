@@ -85,7 +85,39 @@ test.describe('layout & accessibility', () => {
     expect(await a.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
   });
 
-  test('copy link, QR enlarge and QR download', async ({ browser }) => {
+  test('phone: theme and settings are reachable from every tab via More', async ({ browser }) => {
+    const a = await device(browser, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await createRoom(a);
+    for (const tab of ['room', 'files', 'chat']) {
+      await a.locator(`.tab[data-tab="${tab}"]`).click();
+      await expect(a.getByRole('button', { name: 'More options' })).toBeInViewport();
+    }
+    await a.getByRole('button', { name: 'More options' }).click();
+    const sheet = a.getByRole('dialog', { name: 'More' });
+    await sheet.locator('label', { hasText: 'Dark' }).click(); // tap the visible option
+    await expect(sheet.getByRole('radio', { name: 'Dark' })).toBeChecked();
+    expect(await a.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+    await sheet.locator('label', { hasText: 'System' }).click(); // tap the visible option
+    await expect(sheet.getByRole('radio', { name: 'System' })).toBeChecked();
+    expect(await a.evaluate(() => document.documentElement.dataset.theme)).toBeUndefined();
+    await sheet.locator('label', { hasText: 'Light' }).click(); // tap the visible option
+    await expect(sheet.getByRole('radio', { name: 'Light' })).toBeChecked();
+    await a.reload();
+    expect(await a.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
+    await a.getByRole('button', { name: 'More options' }).click();
+    await expect(a.getByRole('radio', { name: 'Light' })).toBeChecked();
+    await a.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'How it works' }).click();
+    await expect(a.getByRole('dialog', { name: 'How QRShare works' })).toBeVisible();
+  });
+
+  test('desktop: More button is not shown (theme and help are in the top bar)', async ({ browser }) => {
+    const a = await device(browser);
+    await createRoom(a);
+    await expect(a.locator('#moreBtn')).toBeHidden();
+    await expect(a.locator('#themeBtn')).toBeVisible();
+  });
+
+    test('copy link, QR enlarge and QR download', async ({ browser }) => {
     const a = await device(browser, { permissions: ['clipboard-read', 'clipboard-write'] });
     const url = await createRoom(a);
     await a.locator('#copyLinkBtn').click();

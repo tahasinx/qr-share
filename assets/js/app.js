@@ -19,6 +19,7 @@ import { scannerSupported, startScanner } from './ui/scanner.js';
 import { mountTransfers } from './views/transfers.js';
 import { mountChat } from './views/chat.js';
 import { mountPeople } from './views/people.js';
+import { setupInstall } from './install.js';
 
 const store = safeStorage('localStorage');
 const sessionStore = safeStorage('sessionStorage');
@@ -731,6 +732,33 @@ function helpDialog() {
   });
 }
 
+/** Phone menu: settings and secondary actions that don't fit in the top bar. */
+function moreDialog() {
+  const options = [['system', 'System', 'system'], ['light', 'Light', 'sun'], ['dark', 'Dark', 'moon']];
+  const group = h('fieldset', { class: 'choice' },
+    h('legend', { class: 'choice__legend', text: 'Theme' }),
+    h('div', { class: 'segmented' }, options.map(([value, label, glyph]) => h('label', null,
+      h('input', {
+        type: 'radio', name: 'theme', value, checked: currentTheme() === value,
+        onchange: () => setTheme(value),
+      }),
+      icon(glyph, { size: 18 }),
+      label))));
+  const item = (glyph, label, run) => h('li', null, h('button', {
+    class: 'menu-item', type: 'button', onclick: () => { dialog.close(); run(); },
+  }, icon(glyph, { size: 20 }), label));
+  const dialog = openDialog({
+    title: 'More',
+    body: [
+      group,
+      h('ul', { class: 'menu-list' },
+        item('help', 'How it works', helpDialog),
+        session ? item('pencil', 'Rename this device', renameDialog) : null,
+        session ? item('activity', 'Connection details', connectionDialog) : null),
+    ],
+  });
+}
+
 function connectionDialog() {
   if (!session) return;
   const { room } = session;
@@ -847,6 +875,7 @@ async function saveQr() {
 function bindGlobalUi() {
   el.joinBtn.addEventListener('click', joinDialog);
   for (const b of document.querySelectorAll('[data-action="help"]')) b.addEventListener('click', helpDialog);
+  $('#moreBtn').addEventListener('click', moreDialog);
   el.leaveBtn.addEventListener('click', leaveRoom);
   el.statusPill.addEventListener('click', connectionDialog);
   el.qrButton.addEventListener('click', enlargeQr);
@@ -854,11 +883,14 @@ function bindGlobalUi() {
   el.shareBtn.addEventListener('click', shareLink);
   el.saveQrBtn.addEventListener('click', saveQr);
   el.brandLink.addEventListener('click', (e) => { e.preventDefault(); newRoom(); });
+  // The URL fragment holds the room code, so the skip link must move focus without touching the URL.
+  $('.skip-link').addEventListener('click', (e) => { e.preventDefault(); $('#main').focus(); });
   el.tabs.addEventListener('click', (e) => {
     const b = e.target.closest('.tab');
     if (b) setTab(b.dataset.tab, { user: true });
   });
   bindFileIntake();
+  setupInstall($('#installBtn'), { getLink: () => session?.link || location.href });
 
   window.addEventListener('hashchange', () => route());
   window.addEventListener('popstate', () => route());
@@ -892,29 +924,29 @@ function bindGlobalUi() {
 const THEMES = ['system', 'light', 'dark'];
 const THEME_LABEL = { system: 'Theme: match system', light: 'Theme: light', dark: 'Theme: dark' };
 
+const currentTheme = () => document.documentElement.dataset.theme || 'system';
+
+function setTheme(theme) {
+  applyTheme(theme);
+  store.set('qrshare:theme', theme);
+}
+
 function initTheme() {
   const saved = store.get('qrshare:theme');
   applyTheme(THEMES.includes(saved) ? saved : 'system');
-  const cycle = () => {
-    const current = document.documentElement.dataset.theme || 'system';
-    const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
-    applyTheme(next);
-    store.set('qrshare:theme', next);
+  // Desktop: one button that cycles. Phones choose explicitly in the More menu.
+  el.themeBtn.addEventListener('click', () => {
+    const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+    setTheme(next);
     toast({ tone: 'info', key: 'theme', title: THEME_LABEL[next], duration: 1600 });
-  };
-  for (const b of document.querySelectorAll('[data-action="theme"]')) b.addEventListener('click', cycle);
+  });
 }
 
 function applyTheme(theme) {
   const root = document.documentElement;
   if (theme === 'system') delete root.dataset.theme; else root.dataset.theme = theme;
-  const iconName = { system: 'system', light: 'sun', dark: 'moon' }[theme];
-  for (const b of document.querySelectorAll('[data-action="theme"]')) {
-    const small = b !== el.themeBtn;
-    const glyph = icon(iconName, { size: small ? 16 : 20 });
-    if (small) b.firstElementChild.replaceWith(glyph); else b.replaceChildren(glyph);
-    b.setAttribute('aria-label', `${THEME_LABEL[theme]}. Change theme`);
-  }
+  el.themeBtn.replaceChildren(icon({ system: 'system', light: 'sun', dark: 'moon' }[theme]));
+  el.themeBtn.setAttribute('aria-label', `${THEME_LABEL[theme]}. Change theme`);
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     const dark = meta.media.includes('dark');
     if (theme === 'system') meta.content = dark ? '#0c1124' : '#f3f5fa';
