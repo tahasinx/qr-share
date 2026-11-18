@@ -371,11 +371,6 @@ img, svg, video { display: block; max-width: 100%; }
   }
   .panel--chat > .panel__head { display: none; }
 }
-@media (max-height: 520px) and (max-width: 1179.98px) {
-  .tab { flex-direction: row; height: 44px; gap: 6px; font-size: var(--fs-sm); }
-  .tab::before { top: 7px; height: 30px; width: 92px; margin-left: -46px; }
-  .tab .badge { position: static; }
-}
 
 /* ---------- Tabs ---------- */
 .tabs { display: flex; gap: var(--s1); }
@@ -411,15 +406,20 @@ img, svg, video { display: block; max-width: 100%; }
   .tab:focus-visible { outline-offset: -2px; }
   .tab .icon { transition: transform var(--t-med) var(--ease-spring); }
   .tab::before {
-    content: ''; position: absolute; top: 6px; left: 50%; width: 52px; height: 30px; margin-left: -26px;
-    border-radius: var(--r-full); background: var(--accent-soft);
-    transform: scaleX(0.4); opacity: 0;
+    content: ''; position: absolute; inset: 4px 6px;
+    border-radius: 14px; background: var(--accent-soft);
+    transform: scale(0.85); opacity: 0;
     transition: transform var(--t-med) var(--ease-out), opacity var(--t-med) ease;
   }
   .tab > * { position: relative; }
   .tab[aria-current="page"] { color: var(--accent-soft-ink); }
-  .tab[aria-current="page"]::before { transform: scaleX(1); opacity: 1; }
-  .tab .badge { position: absolute; top: 4px; left: calc(50% + 8px); }
+  .tab[aria-current="page"]::before { transform: scale(1); opacity: 1; }
+  .tab .badge { position: absolute; top: 6px; left: calc(50% + 8px); }
+}
+/* Short landscape phones: icon and label side by side in a slimmer bar. */
+@media (max-height: 520px) and (max-width: 1179.98px) {
+  .tab { flex-direction: row; height: 44px; gap: 6px; font-size: var(--fs-sm); }
+  .tab .badge { position: static; }
 }
 
 /* ---------- Room panel ---------- */
@@ -793,15 +793,6 @@ img, svg, video { display: block; max-width: 100%; }
 .dialog__text--muted { color: var(--ink-2); font-size: var(--fs-sm); }
 .dialog__text--center { text-align: center; }
 .dialog__subtitle { font-size: var(--fs-md); font-weight: 650; margin-top: var(--s3); }
-@media (max-width: 559.98px) {
-  .dialog, .dialog--wide {
-    width: 100vw; max-width: 100vw; margin: auto 0 0; border-radius: var(--r-xl) var(--r-xl) 0 0;
-    max-height: 92dvh;
-  }
-  .dialog[open] { animation-name: sheet-in; animation-duration: var(--t-slow); }
-  .dialog.is-closing { animation-name: sheet-out; }
-  .dialog__actions .btn { flex: 1; }
-}
 
 .field__label { font-weight: 600; font-size: var(--fs-sm); }
 .field__input {
@@ -837,6 +828,22 @@ img, svg, video { display: block; max-width: 100%; }
 .qr-large__code { text-align: center; font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
 .dialog--preview { width: min(900px, calc(100vw - 2 * var(--s4))); }
 .preview__img { max-height: 70dvh; width: auto; margin: 0 auto; border-radius: var(--r-md); object-fit: contain; }
+/* Phones: dialogs become bottom sheets. Kept after every dialog variant so no later width rule
+   (e.g. .dialog--qr) can override it. */
+@media (max-width: 559.98px) {
+  .dialog, .dialog--wide, .dialog--preview {
+    width: 100vw; max-width: 100vw; margin: auto 0 0; border-radius: var(--r-xl) var(--r-xl) 0 0;
+    max-height: 92dvh;
+  }
+  .dialog[open] { animation-name: sheet-in; animation-duration: var(--t-slow); }
+  .dialog.is-closing { animation-name: sheet-out; }
+  .dialog__actions .btn { flex: 1; }
+  /* The QR is held up to another camera, so it stays a centred card rather than a sheet. */
+  .dialog.dialog--qr { width: calc(100vw - 2 * var(--s3)); margin: auto; border-radius: var(--r-xl); }
+  .dialog.dialog--qr[open] { animation-name: dialog-in; animation-duration: var(--t-med); }
+  .dialog.dialog--qr.is-closing { animation-name: dialog-out; }
+  .qr-large__code { font-size: clamp(1.25rem, 7vw, var(--fs-2xl)); letter-spacing: 0.08em; }
+}
 
 .safety-code {
   text-align: center; font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0.08em;
