@@ -145,7 +145,7 @@ The default is the free public PeerJS cloud (`0.peerjs.com`), which has no uptim
 **What's protected**
 - File and message contents travel only over WebRTC DataChannels, which are always encrypted in transit (DTLS). They are never uploaded or stored by QRShare.
 - Received files are kept in memory until you save them, clear them, or leave. Nothing is written to storage without your action.
-- Room codes come from `crypto.getRandomValues` (~49.5 bits). The code lives in the URL fragment (`#…`), which browsers don't send to the web server.
+- Room codes come from `crypto.getRandomValues` (~49.5 bits). Links use the form `…/?room=CODE` because every QR scanner treats that as an openable link. The trade-off: the static host (GitHub Pages, Vercel) can see room codes in its request logs. A code grants nothing once everyone has left the room; older `#CODE` links still work.
 - All peer-supplied content (names, file names, messages) is rendered as text, never HTML. File names are stripped of path separators, control characters and bidi-override spoofing (`gpj.exe`). Received non-image files are stored as opaque `application/octet-stream` blobs and only offered as downloads.
 - Protocol input is size-checked and bounded: control messages ≤ 256 KiB, files can't exceed their announced size, rosters are capped, and each device can have at most 10 unanswered offers pending.
 - A strict CSP (`script-src 'self'`, no inline scripts or styles, limited `connect-src`), `referrer: no-referrer`, no analytics and no tracking.

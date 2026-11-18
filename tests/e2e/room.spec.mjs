@@ -5,7 +5,8 @@ test.describe('rooms & connections', () => {
   test('creates a room with a secure code, QR and link', async ({ browser }) => {
     const a = await device(browser);
     const url = await createRoom(a);
-    const code = new URL(url).hash.slice(1);
+    const code = new URL(url).searchParams.get('room');
+    expect(new URL(url).hash).toBe('');
     expect(code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{10}$/);
     await expect(a.locator('#roomCode')).toHaveText(`${code.slice(0, 5)}-${code.slice(5)}`);
     await expect(a.locator('#qrCode svg path')).toHaveCount(1);
@@ -126,6 +127,16 @@ test.describe('rooms & connections', () => {
     await expect(a.locator('#screenTitle')).toHaveText('This room link doesn’t work');
   });
 
+  test('older #CODE links still work and are converted to ?room=CODE', async ({ browser }) => {
+    const a = await device(browser, { name: 'New link' });
+    const url = await createRoom(a);
+    const code = new URL(url).searchParams.get('room');
+    const b = await device(browser, { name: 'Old link' });
+    await join(b, `${APP_URL}#${code}`);
+    expect(new URL(b.url()).searchParams.get('room')).toBe(code);
+    expect(new URL(b.url()).hash).toBe('');
+  });
+
   test('opening a link to an empty room explains the situation', async ({ browser }) => {
     const a = await device(browser);
     await a.goto(`${APP_URL}#ABCDEFGHJK`);
@@ -136,7 +147,7 @@ test.describe('rooms & connections', () => {
   test('joining by typed code switches rooms', async ({ browser }) => {
     const a = await device(browser, { name: 'Source' });
     const url = await createRoom(a);
-    const code = new URL(url).hash.slice(1);
+    const code = new URL(url).searchParams.get('room');
     const b = await device(browser, { name: 'Typist' });
     await createRoom(b);
     await b.getByRole('button', { name: 'Join a room' }).click();
@@ -146,7 +157,7 @@ test.describe('rooms & connections', () => {
     await b.locator('#joinCode').fill(`${code.slice(0, 5).toLowerCase()}-${code.slice(5)}`);
     await b.getByRole('button', { name: 'Join room' }).click();
     await expect(status(b)).toHaveText('Connected to Source');
-    expect(new URL(b.url()).hash).toBe(`#${code}`);
+    expect(new URL(b.url()).searchParams.get('room')).toBe(code);
   });
 
   test('a full room turns newcomers away with an explanation', async ({ browser }) => {

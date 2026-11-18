@@ -26,7 +26,7 @@ export function parseRoomCode(input) {
   let s = String(input).trim();
   try {
     const u = new URL(s);
-    s = (u.hash || '').replace(/^#/, '') || u.searchParams.get('room') || '';
+    s = u.searchParams.get('room') || (u.hash || '').replace(/^#/, '') || '';
   } catch { /* not a URL */ }
   s = s.toUpperCase().replace(/[\s-]/g, '');
   if (s.length !== ROOM_CODE_LENGTH) return null;
@@ -36,11 +36,26 @@ export function parseRoomCode(input) {
 
 export const formatRoomCode = (code) => `${code.slice(0, 5)}-${code.slice(5)}`;
 
+/**
+ * Shareable link for a room: `https://host/path/?room=CODE`. A plain query link is recognised as
+ * openable by every QR scanner; some stricter scanner apps don't offer to open `#`-only links.
+ */
 export function roomLink(code) {
   const u = new URL(location.href);
   u.search = '';
-  u.hash = code;
+  u.hash = '';
+  u.searchParams.set('room', code);
   return u.toString();
+}
+
+/** True when this page's address can't be opened from another device (localhost, private IPs). */
+export function isLocalOnlyHost(hostname = location.hostname) {
+  const h = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h === '::1') return true;
+  const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(h);
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
 }
 
 export function formatBytes(bytes) {

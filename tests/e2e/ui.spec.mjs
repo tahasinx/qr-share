@@ -90,6 +90,9 @@ test.describe('layout & accessibility', () => {
     const url = await createRoom(a);
     await a.locator('#copyLinkBtn').click();
     expect(await a.evaluate(() => navigator.clipboard.readText())).toBe(url);
+    expect(url).toMatch(/\/qr-share\/\?room=[A-Z0-9]{10}$/);
+    // The test server runs on localhost, so the "other devices can't open this" warning shows.
+    await expect(a.locator('#localWarn')).toBeVisible();
     await a.locator('#qrButton').click();
     await expect(a.locator('.qr-large svg')).toBeVisible();
     await a.keyboard.press('Escape');

@@ -469,6 +469,12 @@ img, svg, video { display: block; max-width: 100%; }
 .app[data-phase="active"] .qr__corners i { border-color: var(--line-strong); }
 .app[data-phase="connecting"] .qr__corners i { opacity: 0.45; }
 
+.room-card__warn {
+  display: flex; gap: var(--s2); align-items: flex-start; max-width: 34ch; text-align: left;
+  padding: var(--s3); border-radius: var(--r-md);
+  background: var(--warn-soft); color: var(--warn); font-size: var(--fs-sm); line-height: 1.4;
+}
+.room-card__warn .icon { margin-top: 1px; }
 .room-code { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .room-code__label { font-size: var(--fs-xs); color: var(--ink-3); font-weight: 500; }
 .room-code__value {

@@ -8,7 +8,7 @@ import { ChatStore } from './chat.js';
 import { copyText } from './clipboard.js';
 import {
   newRoomCode, parseRoomCode, formatRoomCode, roomLink, randomDeviceName, detectDevice,
-  sanitizeDisplayName, randomString, safeStorage,
+  sanitizeDisplayName, randomString, safeStorage, isLocalOnlyHost,
 } from './util.js';
 import { h, $, setText, setChildren } from './ui/dom.js';
 import { icon, hydrateIcons } from './ui/icons.js';
@@ -36,6 +36,7 @@ const el = {
   tabs: $('#tabs'),
   roomHeading: $('#roomHeading'),
   roomHint: $('#roomHint'),
+  localWarn: $('#localWarn'),
   qrButton: $('#qrButton'),
   qrCode: $('#qrCode'),
   roomCode: $('#roomCode'),
@@ -108,11 +109,10 @@ function boot() {
   route({ initial: true });
 }
 
-/** Reads the room from the URL (#CODE, or the legacy ?room=CODE) and starts it. */
+/** Reads the room from the URL (?room=CODE, or the older #CODE form) and starts it. */
 function route({ initial = false } = {}) {
   const url = new URL(location.href);
-  const legacy = url.searchParams.get('room');
-  const raw = url.hash.replace(/^#/, '') || legacy || '';
+  const raw = url.searchParams.get('room') || url.hash.replace(/^#/, '') || '';
   if (!raw) {
     const code = newRoomCode();
     history.replaceState(null, '', roomLink(code));
@@ -130,7 +130,7 @@ function route({ initial = false } = {}) {
     });
     return;
   }
-  if (legacy || url.hash.slice(1) !== code) history.replaceState(null, '', roomLink(code));
+  if (url.toString() !== roomLink(code)) history.replaceState(null, '', roomLink(code)); // canonical ?room= form
   if (session?.code === code && !initial) return;
   startRoom(code, { created: false });
 }
@@ -462,6 +462,8 @@ function renderRoomCard() {
   void el.qrButton.offsetWidth;
   el.qrButton.classList.add('qr--reveal');
   el.shareBtn.hidden = typeof navigator.share !== 'function';
+  // A localhost / private-network link can't be opened from a phone; scanners show it as plain text.
+  el.localWarn.hidden = !isLocalOnlyHost();
 }
 
 function updateDropzone() {

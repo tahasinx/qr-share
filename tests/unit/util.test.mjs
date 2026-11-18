@@ -26,6 +26,15 @@ test('parseRoomCode accepts formatted, lowercase and full links; rejects junk', 
   }
 });
 
+test('isLocalOnlyHost flags addresses other devices cannot open', () => {
+  for (const h of ['localhost', '127.0.0.1', '192.168.1.20', '10.0.0.5', '172.20.1.1', '[::1]', 'mypc.local', '169.254.3.4']) {
+    assert.equal(util.isLocalOnlyHost(h), true, h);
+  }
+  for (const h of ['tahasinx.github.io', 'qrshare-alpha.vercel.app', '8.8.8.8', '172.32.0.1']) {
+    assert.equal(util.isLocalOnlyHost(h), false, h);
+  }
+});
+
 test('sanitizeFileName strips spoofing characters, separators and edge dots', () => {
   assert.equal(util.sanitizeFileName('report‮fdp.exe'), 'reportfdp.exe');
   assert.equal(util.sanitizeFileName('../../etc/passwd'), '_.._etc_passwd');
