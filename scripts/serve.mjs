@@ -19,7 +19,12 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8',
 };
 
-export function startServer(port = PORT) {
+/**
+ * @param {number} port
+ * @param {{ transform?: (relPath: string, body: Buffer) => Buffer|string }} [options]
+ *   `transform` lets tests rewrite a file on the fly (e.g. simulate a deploy of a new sw.js).
+ */
+export function startServer(port = PORT, { transform } = {}) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     if (url.pathname === '/' || url.pathname === '/qr-share') { res.writeHead(302, { location: BASE }); res.end(); return; }
@@ -32,7 +37,8 @@ export function startServer(port = PORT) {
     }
     try {
       if (!(await stat(file)).isFile()) throw new Error('not a file');
-      const body = await readFile(file);
+      let body = await readFile(file);
+      if (transform) body = transform(rel, body);
       res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
       res.end(body);
     } catch {

@@ -968,36 +968,53 @@ function releaseWakeLock() {
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  let requestedHere = false;
+
+  /** Nothing would be lost by reloading right now: no one connected, nothing sending or waiting to send. */
+  const safeToReload = () => !session
+    || (!session.room.connectedPeers().length && !session.transfers.hasActiveTransfers() && !session.transfers.staged.length);
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // Only reload when an *update* took over, never on the very first install. An update activates
+    // for every open tab, so a tab that's busy (connected or transferring) keeps running untouched.
+    if (reloading || !hadController || !(requestedHere || safeToReload())) return;
+    reloading = true;
+    location.reload();
+  });
+
+  const apply = (worker) => { requestedHere = true; worker.postMessage('skip-waiting'); };
+
+  const offer = (worker) => {
+    if (!navigator.serviceWorker.controller) return; // first install: nothing outdated is running
+    if (safeToReload()) { apply(worker); return; } // seamless: same URL, same room
+    toast({
+      tone: 'info', key: 'update', title: 'A new version of QRShare is ready', duration: 0,
+      action: {
+        label: 'Reload', run: async () => {
+          if (session?.transfers.hasActiveTransfers()) {
+            const ok = await confirmDialog({ title: 'Reload now?', message: 'Transfers in progress will stop.', confirmLabel: 'Reload', danger: true });
+            if (!ok) return;
+          }
+          apply(worker);
+        },
+      },
+    });
+  };
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then((reg) => {
+      // An update may already have finished installing before this page loaded (e.g. in another tab);
+      // it then sits in "waiting" and no updatefound event fires for this page.
+      if (reg.waiting) offer(reg.waiting);
       reg.addEventListener('updatefound', () => {
         const worker = reg.installing;
-        worker?.addEventListener('statechange', () => {
-          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-            toast({
-              tone: 'info', key: 'update', title: 'A new version of QRShare is ready', duration: 0,
-              action: {
-                label: 'Reload', run: async () => {
-                  if (session?.transfers.hasActiveTransfers()) {
-                    const ok = await confirmDialog({ title: 'Reload now?', message: 'Transfers in progress will stop.', confirmLabel: 'Reload', danger: true });
-                    if (!ok) return;
-                  }
-                  worker.postMessage('skip-waiting');
-                },
-              },
-            });
-          }
-        });
+        worker?.addEventListener('statechange', () => { if (worker.state === 'installed') offer(worker); });
       });
+      // Long-lived tabs: look for a new deploy whenever the tab comes back into view.
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
     }).catch(() => { /* offline support is optional */ });
-    let reloading = false;
-    const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      // Only reload when an *update* took over, never on the very first install.
-      if (reloading || !hadController) return;
-      reloading = true;
-      location.reload();
-    });
   });
 }
 
