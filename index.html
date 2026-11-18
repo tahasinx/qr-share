@@ -1,108 +1,192 @@
 <!doctype html>
 <html lang="en">
-
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>QR Room — Peer file + chat demo</title>
-    <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
-    <!-- Bootstrap -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=1.1.1">
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>QRShare: send files between devices, peer to peer</title>
+  <meta name="description" content="Send files and messages straight from one browser to another. Scan a QR code to connect. No accounts, no uploads to a server.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f3f5fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c1124" media="(prefers-color-scheme: dark)">
+  <meta property="og:title" content="QRShare">
+  <meta property="og:description" content="Scan a code. Send files directly between devices, no account or upload needed.">
+  <link rel="icon" href="assets/icons/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preload" href="assets/fonts/schibsted-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/app.css">
+  <script src="assets/js/theme-init.js"></script>
+  <script src="assets/vendor/peerjs-1.5.5.min.js" defer></script>
+  <script src="assets/vendor/qrcode-generator-1.4.4.js" defer></script>
+  <script type="module" src="assets/js/app.js"></script>
 </head>
-
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-    <div class="container-fluid">
-        <div class="row g-3">
-            <!-- Main column -->
-            <div class="col-lg-8">
-                <div class="card-ui">
-                    <div class="text-center mb-3">
-                        <h4 id="title">Scan / open this room link</h4>
-                        <div id="qrcode" class="d-inline-block bg-white p-3 rounded"></div>
+  <div class="app" id="app" data-phase="connecting" data-tab="room">
+    <header class="topbar">
+      <a class="brand" href="./" id="brandLink" aria-label="QRShare: start a new room">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect x="3" y="3" width="11" height="11" rx="3" class="brand__ring"/>
+          <rect x="7" y="7" width="3" height="3" rx="1" class="brand__dot"/>
+          <rect x="18" y="3" width="11" height="11" rx="3" class="brand__ring"/>
+          <rect x="22" y="7" width="3" height="3" rx="1" class="brand__dot"/>
+          <rect x="3" y="18" width="11" height="11" rx="3" class="brand__ring"/>
+          <rect x="7" y="22" width="3" height="3" rx="1" class="brand__dot"/>
+          <path d="M19.5 28.5 28.5 19.5M21 19.5h7.5V27" class="brand__arrow"/>
+        </svg>
+        <span class="brand__name">QRShare</span>
+      </a>
 
-                        <div class="mt-2 d-flex justify-content-center gap-2">
-                            <button id="copyBtn" class="btn btn-outline-light btn-sm">Copy link</button>
-                            <button id="regen" class="btn btn-outline-light btn-sm">New room</button>
-                        </div>
-                        <div class="small mt-2">Room URL: <span id="roomUrl" class="text-break"></span></div>
-                        <div class="small mt-1">Mode: <strong id="mode">waiting</strong></div>
-                    </div>
+      <button class="status-pill" id="statusPill" type="button" aria-describedby="statusText">
+        <span class="status-pill__dot" aria-hidden="true"></span>
+        <span id="statusText" role="status">Connecting…</span>
+      </button>
 
-                    <div id="chat-file-section" class="d-none">
-                        <div class="row g-3">
-                            <div class="col-md-7">
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div><strong>Text chat</strong> <span class="small">(peer-to-peer)</span></div>
-                                        <div class="small" id="peersCount">Peers: 1</div>
-                                    </div>
-                                    <div id="messages" class="messages d-flex flex-column"></div>
-                                    <div class="input-group mt-2">
-                                        <input id="textIn" type="text" class="form-control"
-                                            placeholder="Type a message">
-                                        <button id="sendBtn" class="btn btn-primary">Send</button>
-                                    </div>
-                                </div>
-                            </div>
+      <div class="topbar__actions">
+        <button class="btn btn--quiet btn--sm topbar__join" id="joinBtn" type="button">
+          <span data-icon="scan" data-size="18"></span><span class="topbar__label">Join a room</span>
+        </button>
+        <button class="icon-btn topbar__extra" id="helpBtn" type="button" data-action="help" aria-label="How QRShare works" title="How it works">
+          <span data-icon="help"></span>
+        </button>
+        <button class="icon-btn topbar__extra" id="themeBtn" type="button" data-action="theme" aria-label="Theme: match system" title="Theme">
+          <span data-icon="system"></span>
+        </button>
+        <button class="icon-btn" id="leaveBtn" type="button" aria-label="Leave room" title="Leave room">
+          <span data-icon="leave"></span>
+        </button>
+      </div>
+    </header>
 
-                            <div class="col-md-5">
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div><strong>Files</strong> <span class="small">(select to send)</span></div>
-                                        <div class="small" id="fileStatus">No transfers</div>
-                                    </div>
 
-                                    <div class="d-flex flex-column align-items-center justify-content-center p-3 file-container"
-                                        style="background:rgba(255,255,255,0.02);border-radius:8px;min-height:160px">
-                                        <label for="fileInput" class="btn btn-outline-light btn-sm">Choose file</label>
-                                        <input id="fileInput" type="file" class="d-none" multiple>
-                                        <div id="incomingArea" class="mt-3 w-100"
-                                            style="max-height: 160px;overflow: auto;"></div>
-                                    </div>
+    <main class="layout" id="main" tabindex="-1">
+      <nav class="tabs" id="tabs" aria-label="Sections">
+        <button class="tab" type="button" data-tab="room" aria-controls="panel-room">
+          <span data-icon="qr"></span><span>Room</span><span class="badge" id="badge-room" hidden></span>
+        </button>
+        <button class="tab" type="button" data-tab="files" aria-controls="panel-files">
+          <span data-icon="file"></span><span>Files</span><span class="badge" id="badge-files" hidden></span>
+        </button>
+        <button class="tab" type="button" data-tab="chat" aria-controls="panel-chat">
+          <span data-icon="message"></span><span>Chat</span><span class="badge" id="badge-chat" hidden></span>
+        </button>
+      </nav>
 
-                                    <div class="mt-2">
-                                        <small>
-                                            Accepted transfers will appear as download links. Max 100MB per file, 16KB chunks for reliable WebRTC.
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- Room: the QR code is the way in -->
+      <section class="panel panel--room" id="panel-room" aria-labelledby="roomHeading">
+        <div class="room-card">
+          <h1 class="room-card__title" id="roomHeading">Scan to connect</h1>
+          <p class="room-card__hint" id="roomHint">Point another device’s camera at this code, or send it the link.</p>
 
-            <!-- Logs column -->
-            <div class="col-lg-4">
-                <div class="card-ui h-100">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <strong>Connection Logs</strong>
-                        <button id="clearLogs" class="btn btn-sm btn-outline-light">Clear</button>
-                    </div>
-                    <div id="logs"></div>
-                </div>
-            </div>
+          <button class="qr" id="qrButton" type="button" aria-label="Show QR code full screen">
+            <span class="qr__corners" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span class="qr__code" id="qrCode"></span>
+            <span class="qr__zoom" aria-hidden="true"><span data-icon="expand" data-size="16"></span></span>
+          </button>
+
+          <div class="room-code">
+            <span class="room-code__label" id="roomCodeLabel">Room code</span>
+            <output class="room-code__value" id="roomCode" aria-labelledby="roomCodeLabel"></output>
+          </div>
+
+          <div class="room-actions">
+            <button class="btn btn--primary" id="copyLinkBtn" type="button">
+              <span data-icon="link" data-size="18"></span><span>Copy link</span>
+            </button>
+            <button class="btn btn--quiet" id="shareBtn" type="button" hidden>
+              <span data-icon="share" data-size="18"></span><span>Share</span>
+            </button>
+            <button class="icon-btn icon-btn--bordered" id="saveQrBtn" type="button" aria-label="Save QR code as image" title="Save QR code">
+              <span data-icon="download" data-size="18"></span>
+            </button>
+          </div>
         </div>
-        <footer class="footer">
-            <div class="small">Tips: open this page on both devices (or scan QR). The first
-                visitor becomes the room host. When another joins the same room URL, mode turns to
-                <strong>file-sharing</strong>. <br> Files are sent over PeerJS data connections in chunks. <br>
-                Made with ❤️ by <a href="https://github.com/tahasinx">Tahasinx</a>.
-            </div>
-        </footer>
+
+        <div class="people">
+          <h2 class="section-title">In this room <span class="count" id="peopleCount">1</span></h2>
+          <ul class="people__list" id="peopleList" role="list"></ul>
+          <p class="people__note">
+            <span data-icon="lock" data-size="14"></span>
+            Files and messages travel directly between devices, encrypted in transit.
+          </p>
+        </div>
+
+        <div class="room-footer">
+          <button class="btn btn--quiet btn--sm" type="button" data-action="help">
+            <span data-icon="help" data-size="16"></span><span>How it works</span>
+          </button>
+          <button class="btn btn--quiet btn--sm" type="button" data-action="theme" aria-label="Theme: match system">
+            <span data-icon="system" data-size="16"></span><span>Theme</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Files -->
+      <section class="panel panel--files" id="panel-files" aria-labelledby="filesHeading">
+        <div class="panel__head">
+          <h2 class="section-title" id="filesHeading">Files</h2>
+          <button class="btn btn--quiet btn--sm" id="clearBtn" type="button" hidden>Clear finished</button>
+        </div>
+
+        <div class="dropzone" id="dropzone">
+          <input class="sr-only" id="fileInput" type="file" multiple tabindex="-1" aria-hidden="true">
+          <div class="dropzone__art" aria-hidden="true"><span data-icon="upload" data-size="22"></span></div>
+          <div class="dropzone__text">
+            <p class="dropzone__title" id="dropTitle">Send files</p>
+            <p class="dropzone__hint" id="dropHint">Drop files anywhere, paste them, or choose from this device.</p>
+          </div>
+          <button class="btn btn--primary" id="chooseBtn" type="button">
+            <span data-icon="plus" data-size="18"></span><span>Choose files</span>
+          </button>
+        </div>
+
+        <div class="staged" id="staged" hidden></div>
+        <div class="transfers" id="transferList"></div>
+      </section>
+
+      <!-- Chat -->
+      <section class="panel panel--chat" id="panel-chat" aria-labelledby="chatHeading">
+        <div class="panel__head">
+          <h2 class="section-title" id="chatHeading">Chat</h2>
+        </div>
+        <div class="chat-log" id="chatLog" role="log" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="Messages"></div>
+        <button class="jump" id="jumpBtn" type="button" hidden>
+          <span data-icon="arrowDown" data-size="16"></span>New messages
+        </button>
+        <form class="composer" id="composer" autocomplete="off">
+          <label class="sr-only" for="chatInput">Message</label>
+          <textarea id="chatInput" rows="1" maxlength="4000" enterkeyhint="send" placeholder="Chat opens when someone joins" disabled></textarea>
+          <button class="icon-btn icon-btn--primary" id="sendBtn" type="submit" aria-label="Send message" disabled>
+            <span data-icon="send" data-size="18"></span>
+          </button>
+        </form>
+      </section>
+    </main>
+
+    <!-- Full-screen states: errors, left room, unsupported browser -->
+    <section class="screen" id="screen" hidden aria-labelledby="screenTitle">
+      <div class="screen__card">
+        <div class="screen__icon" id="screenIcon" aria-hidden="true"></div>
+        <h1 class="screen__title" id="screenTitle" tabindex="-1"></h1>
+        <p class="screen__text" id="screenText"></p>
+        <ul class="screen__tips" id="screenTips"></ul>
+        <div class="screen__actions" id="screenActions"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="drop-overlay" id="dropOverlay" hidden aria-hidden="true">
+    <div class="drop-overlay__inner">
+      <span data-icon="upload" data-size="32"></span>
+      <p>Drop to send</p>
     </div>
+  </div>
 
-    <!-- Toast container (bottom-right) -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
-
-    <!-- libs -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/script.js?v=1.1.1"></script>
+  <noscript>
+    <p class="noscript">QRShare needs JavaScript to create peer-to-peer connections.</p>
+  </noscript>
 </body>
-
 </html>

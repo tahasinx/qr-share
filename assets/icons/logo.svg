@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .r{fill:none;stroke:#121a33;stroke-width:2.4}.d{fill:#121a33}.a{fill:none;stroke:#3d3adf;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+    @media (prefers-color-scheme:dark){.r{stroke:#e9edf9}.d{fill:#e9edf9}.a{stroke:#8d8bff}}
+  </style>
+  <rect class="r" x="3" y="3" width="11" height="11" rx="3"/><rect class="d" x="7" y="7" width="3" height="3" rx="1"/>
+  <rect class="r" x="18" y="3" width="11" height="11" rx="3"/><rect class="d" x="22" y="7" width="3" height="3" rx="1"/>
+  <rect class="r" x="3" y="18" width="11" height="11" rx="3"/><rect class="d" x="7" y="22" width="3" height="3" rx="1"/>
+  <path class="a" d="M19.5 28.5 28.5 19.5M21 19.5h7.5V27"/>
+</svg>
