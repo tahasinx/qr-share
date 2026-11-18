@@ -2,7 +2,7 @@
 
 **Send files and messages straight from one browser to another.** Open QRShare, scan the code with another device, and share. Nothing is uploaded, and no account is needed.
 
-**Live:** https://tahasinx.github.io/qr-share
+**Live:** https://tahasinx.github.io/qr-share | https://qrshare-alpha.vercel.app/
 
 ---
 
