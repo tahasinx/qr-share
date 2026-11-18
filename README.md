@@ -23,7 +23,7 @@
 - Per-file and per-batch progress, speed and time left, all measured from real bytes on the wire.
 - Pause, resume and cancel from either side, plus retry for failed sends.
 - **Integrity check:** both ends SHA-256 every chunk, and the sender shows *Delivered and verified* only after the receiver confirms the hashes match.
-- Streams with bounded memory and DataChannel backpressure (`bufferedAmount` / `bufferedamountlow`). The UI stays responsive during multi-GB transfers.
+- Streams with bounded memory and DataChannel backpressure (`bufferedAmount` / `bufferedamountlow`), so the UI stays responsive during large transfers (tested up to 600 MB).
 - Image thumbnails and previews, duplicate-name handling (`notes (2).txt`), and warnings on executable files.
 - Pick files before anyone joins: they're offered to the first device that arrives.
 - Keeps the screen awake during transfers (Wake Lock API) and warns before closing mid-transfer.
@@ -36,7 +36,7 @@
 **App**
 - Light and dark themes (follows the system; remembered when set).
 - Installable PWA with an offline app shell.
-- Fully keyboard-operable, screen-reader friendly, and respects reduced motion.
+- Keyboard-operable with visible focus, labelled for screen readers, and respects reduced motion (checked with automated axe tests; not yet tested with a real screen reader).
 - No build step, no frameworks, and no third-party requests besides the signaling and STUN servers.
 
 ---
@@ -101,6 +101,8 @@ The end-to-end suite runs real peer-to-peer sessions between isolated browser co
 - Rooms: creating, joining, three-device mesh, room handover, reload and rejoin, invalid links, full rooms, blocked signaling, and key-spoofing resistance.
 - Transfers: byte-exact SHA-256 comparison of downloaded files, batches with empty and duplicate files, decline, pause/resume, cancel and retry, peer loss mid-transfer, staged files, multiple recipients, and hostile file names.
 - Chat: XSS payloads, receipts and scroll behaviour.
+- Cross-browser: Chrome ⇄ Firefox connection, chat and verified transfers in both directions (runs when Playwright's Firefox is installed: `npx playwright install firefox`).
+- App: offline start from the service worker, assets loading from the sub-path, theme, copy link and QR download.
 - Layout at 320 px through 1920 px including phone landscape, plus axe accessibility checks in both themes.
 
 ---
@@ -112,6 +114,10 @@ The end-to-end suite runs real peer-to-peer sessions between isolated browser co
 3. **On every release, bump `VERSION` in `sw.js`.** Returning visitors then get a *"A new version is ready, Reload"* prompt instead of a stale cached app.
 
 `.nojekyll` is included so GitHub serves every file as-is.
+
+### Other static hosts (e.g. Vercel)
+
+The site needs no build step, and every path is relative, so any static host works from the repository root. On Vercel, use the *Other* framework preset with no build command and the root as the output directory. Vercel will still run `npm install` for the dev tooling in `package.json`; that's harmless, but you can set the install command to empty to skip it. The service-worker `VERSION` rule above applies on every host.
 
 ---
 
@@ -141,7 +147,7 @@ The default is the free public PeerJS cloud (`0.peerjs.com`), which has no uptim
 - Received files are kept in memory until you save them, clear them, or leave. Nothing is written to storage without your action.
 - Room codes come from `crypto.getRandomValues` (~49.5 bits). The code lives in the URL fragment (`#…`), which browsers don't send to the web server.
 - All peer-supplied content (names, file names, messages) is rendered as text, never HTML. File names are stripped of path separators, control characters and bidi-override spoofing (`gpj.exe`). Received non-image files are stored as opaque `application/octet-stream` blobs and only offered as downloads.
-- Protocol input is size-checked and bounded: control messages ≤ 256 KiB, files can't exceed their announced size, rosters are capped, and offers are rate-limited per device.
+- Protocol input is size-checked and bounded: control messages ≤ 256 KiB, files can't exceed their announced size, rosters are capped, and each device can have at most 10 unanswered offers pending.
 - A strict CSP (`script-src 'self'`, no inline scripts or styles, limited `connect-src`), `referrer: no-referrer`, no analytics and no tracking.
 
 **What to know (limitations)**
@@ -155,7 +161,7 @@ The default is the free public PeerJS cloud (`0.peerjs.com`), which has no uptim
 
 ## Browser support & limits
 
-- Current Chrome, Edge, Firefox and Safari (desktop and mobile). In-app QR scanning needs `BarcodeDetector` (Chrome/Edge on Android, macOS, ChromeOS); everywhere else, the phone's camera app or the typed code works.
+- Built for current Chrome, Edge, Firefox and Safari (desktop and mobile). Chrome and Firefox are covered by automated tests, including transfers between the two; Safari hasn't been tested yet. In-app QR scanning needs `BarcodeDetector` (Chrome/Edge on Android, macOS, ChromeOS); everywhere else, the phone's camera app or the typed code works.
 - **No artificial file-size limit.** The practical limit is the receiver's memory and disk: received data is held by the browser's Blob storage until saved. Chrome pages large blobs to disk; mobile Safari is the most constrained, so very large files (multiple GB) to iPhones may fail.
 - Keep both devices on QRShare until transfers finish. Mobile browsers throttle or suspend background tabs.
 - Folders can't be sent directly; zip them first.
